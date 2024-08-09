@@ -55,6 +55,15 @@ Private Sub linkToCell_Click()
 End Sub
 
 Private Sub suggestionList_Click()
+    UserForm1.suggestionList.Visible = False
+    suggestionList.Clear
+    If ThisWorkbook.chgBckCol Then
+        ThisWorkbook.cellWithError.Interior.Color = suggestionList.Value
+    Else
+        ThisWorkbook.cellWithError.Value = suggestionList.Value
+    End If
+    UserForm1.linkToCell.Visible = False
+    linkToCell.Clear
 End Sub
 
 Private Sub RelativesList_Click()
@@ -62,7 +71,7 @@ Private Sub RelativesList_Click()
     Dim index As Integer
     
     ' Get the index of the selected item
-    index = ListBox1.ListIndex + 1 ' ListIndex is zero-based, array is one-based
+    index = RelativesList.ListIndex + 1 ' ListIndex is zero-based, array is one-based
     
     ' Get the corresponding cell address from the RelativesListAddresses array
     If index > 0 And index <= UBound(ThisWorkbook.RelativesListAddresses) Then

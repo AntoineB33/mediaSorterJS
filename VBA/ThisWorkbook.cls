@@ -11,6 +11,7 @@ Dim relativesListCells As Object
 Dim targetAddress As Object
 
 Public cellWithError As range
+Public chgBckCol As Boolean
 
 
 
@@ -94,11 +95,11 @@ Public Sub CheckHttpResponse()
                         Set range = sheet.range(sheet.Cells(CInt(VBARequestParts(1)) + 1, 1), sheet.Cells(CInt(VBARequestParts(1)) + 1, 1))
                         range.Select
                     Case "linkToCell"
+                        chgBckCol = CBool(VBARequestParts(5))
                         updateSuggestions(CInt(VBARequestParts(1)), CInt(VBARequestParts(2)), CInt(VBARequestParts(4)))
                         Set cellWithError = sheet.Cells(CInt(VBARequestParts(2)), CInt(VBARequestParts(1)))
                         UserForm1.linkToCell.Visible = True
                         With UserForm1.suggestionList
-                            .Clear
                             .AddItem VBARequestParts(3)
                             .Visible = True
                         End With
@@ -145,9 +146,6 @@ Public Sub CheckHttpResponse()
                         ReDim arr(1 To UBound(RelativesListAddresses(sheetCodeName)) + 1)
                         UserForm1.RelativesList.AddItem VBARequestParts(1)
                         arr(UBound(arr)) = VBARequestParts(2)
-                    Case "checkSuccess"
-                        UserForm1.linkToCell.Visible = False
-                        UserForm1.suggestionList.Visible = False
                     Case "Renamings"
                         With UserForm1.renamings
                             .Caption = VBARequestParts(1)
@@ -178,8 +176,6 @@ End Sub
 Private Sub Worksheet_SelectionChange(ByVal Target As range)
     CallJavaScriptFunctionAsync "selectionChange", True, "selectedCells", Target.Address
 End Sub
-
-
 
 Private Sub Workbook_SheetActivate(ByVal Sh As Object)
     sheetCodeName = Sh.codeName
@@ -260,7 +256,6 @@ End Sub
 Sub updateSuggestions(i As Integer, j As Integer, suggestions As Variant)
     Dim suggestionList As Object
     Set suggestionList = UserForm1.suggestionList
-    suggestionList.Clear ' Clear previous suggestions
 
     Dim suggestionText As Variant
     For Each suggestionText In suggestions

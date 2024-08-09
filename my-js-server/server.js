@@ -51,9 +51,9 @@ var selectedCells = {};
 var resolved = {};
 var oldVersionsMaxNb = 20;
 var columnTypes;
-var namesSt = "names";
-var mediaSt = "mediata";
-var child
+var child;
+var data;
+var headerNames;
 
 // [node.js]
 var VBARequests;
@@ -62,6 +62,12 @@ var VBARequests;
 const allColumnTypes = {
   CONDITIONS: 0,
   ATTRIBUTES: 1
+};
+
+const allColumnNames = {
+  NAMES: "names",
+  MEDIA: "media",
+  PERIODS: "periods"
 };
 
 
@@ -99,7 +105,6 @@ function handleSelectLinks() {
   }
   column -= 1
   
-  VBARequests += `clearRelativesList;`;
   if(row>=nbLineBef || column >= colNumb) {
     return -1;
   }
@@ -155,7 +160,7 @@ function handleChange(updates) {
     var column = update[1] - 1;  // Adjusting for zero-based index
     var value = update[2];
     var splitValue = value;
-    if(value && row) {
+    if(value) {
       splitValue = value
           .split(";")
           .map(function (v, i) {
@@ -197,6 +202,7 @@ function handleChange(updates) {
 }
 
 function check() {
+  resolved[sheetCodeName] = false;
   
   data = [0];
   perInt = [0];
@@ -227,7 +233,7 @@ function check() {
   let attNames = [];
   attributes = [];
   let acc = 0;
-  for (let j = 1; j < colNumb - 1; j++) {
+  for (let j = 0; j < colNumb; j++) {
     if (columnTypes[j] != allColumnTypes.ATTRIBUTES) {
       continue;
     }
@@ -235,10 +241,10 @@ function check() {
     for (let i = 1; i < nbLineBef; i++) {
       for (let k = 0; k < values[i][j].length; k++) {
         val = values[i][j][k].toLowerCase();
-        if (j < colNumb - 2) {
+        if (values[0][j][k] == periodsSt) {
           if (perRef[i] != -1) {
             console.log("suggREf0");
-            suggSet(i, j, []);
+            suggSet(context, i, j, []);
             return -1;
           }
           for (let r = 0; r < attNames[j - 4].length; r++) {
@@ -260,7 +266,7 @@ function check() {
               if (!searching(r, 0, f)) {
                 continue;
               }
-              if (found(r, i, j, k) == -1) {
+              if (found(context, r, i, j, k) == -1) {
                 return -1;
               }
               if(periods) {
@@ -275,7 +281,7 @@ function check() {
             }
           }
           if (!stop) {
-            suggRef(i, j, k);
+            suggRef(context, i, j, k);
             return -1;
           }
         }
@@ -1077,9 +1083,9 @@ function searching(r, d, f) {
   return stop2;
 }
 
-function sugg_removing_elem(i, j, k) {
+function inconsist_removing_elem(i, j, k, message) {
   values[i][j].splice(k, 1);
-  suggSet(i, j, [values[i][j].join("; ")]);
+  inconsist(i, j, [values[i][j].join("; ")], message);
 }
 
 function sugg(i, j) {
@@ -1091,8 +1097,8 @@ function suggSet(i, j, sugg) {
   inconsist(i, j, "Error at " + cellAddress, sugg);
 }
 
-function inconsist(i, j, message, sugg) {
-  VBARequests += `linkToCell:${j + 1}:${i + 1}:${message}:${sugg};`;
+function inconsist(i, j, message, sugg, chgBckCol = false) {
+  VBARequests += `linkToCell:${j + 1}:${i + 1}:${message}:${sugg}:${chgBckCol};`;
 }
 
 function putSugg(i, k) {
@@ -1355,14 +1361,13 @@ function getColumnColor(body, headerColors) {
     return headerColors[nameColumnIndex];
   } else {
     // If the column is not found, return a default value or handle the error
+
     return null;
   }
 }
 
-// Endpoint to call JavaScript functions
-app.post('/execute', (req, res) => {
+function executeJS(body) {
   VBARequests = ``;
-  const body = req.body;
   const funcName = body.functionName;
   if (funcName === 'handleChange') {
     handleChange(body.changes);
@@ -1373,39 +1378,56 @@ app.post('/execute', (req, res) => {
     values = values0[sheetCodeName];
     sheetCodeName = body.sheetCodeName;
 
-    // body.headerColors is the color of each column. Check if body.headerColors has at most two different colors and a 'none'. If there is more, display the index of the first column trespassing the condition
-    let headerColors = body.headerColors;
-    const uniqueColors = new Set();
-
-    for (let i = 0; i < headerColors.length; i++) {
-      const color = headerColors[i];
-        
-      if (color !== null) {
-        uniqueColors.add(color);
-      }
-
-      if (uniqueColors.size > 2) {
-        inconsist(0, i, "A fourth background color found.", [])
-      }
-    }
-    if (uniqueColors.size < 3) {
-
-    
-      const color = getColumnColor(body, headerColors);
-      if (color != null) {
-        columnTypes = [];
-        for (let i = 0; i < headerColors.length; i++) {
-          if (headerColors[i] === color) {
-            columnTypes.push(allColumnTypes.ATTRIBUTES);
-          } else if (headerColors[i] === null) {
-            columnTypes.push(null);
-          } else {
-            columnTypes.push(allColumnTypes.CONDITIONS);
+    // Label the columns "names", "periods" and "media"
+    headerNames[value] = {};
+    let namesColor;
+    let alreadyLabelled;
+    let missingNamesNb = Object.keys(allColumnNames).length;
+    for(let j = 0; j < values[0].length; i++) {
+      alreadyLabelled = "";
+      for(let k = 0; k < values[0][j].length; k++) {
+        if(values[0][j][k] in allColumnNames) {
+          if(alreadyLabelled) {
+            inconsist_removing_elem(0, j, k, `Column ${j} labelled as "${alreadyLabelled}" and ${values[0][j][k]}.`);
+            return;
+          } else if(headerNames[values[0][j][k]] !== undefined) {
+            inconsist_removing_elem(0, j, k, `Column ${j} labelled as "${values[0][j][k]}" already at column ${headerNames[values[0][j][k]]} .`);
+            return;
+          } else if(namesColor !== undefined && namesColor !== headerColors[j]) {
+            inconsist(0, j, `Column ${j} must have the same background color as the attributes.`, [namesColor], true);
+            return;
           }
+          missingNamesNb--;
+          namesColor = headerColors[j];
+          alreadyLabelled = values[0][j][k];
+          headerNames[values[0][j][k]] = alreadyLabelled;
         }
-        check();
       }
     }
+    if(missingNamesNb) {
+      inconsist(0, 0, `Missing columns: ${Object.keys(allColumnNames).filter((name) => headerNames[name] === undefined).join(", ")}.`, []);
+      return;
+    }
+    
+    if (namesColor === undefined) {
+      inconsist(0, 0, `No "names" header found`, [allColumnNames.NAMES]);
+    }
+    columnTypes = [];
+    let condColor;
+    let headerColors = body.headerColors;
+    for (let j = 0; j < headerColors.length; j++) {
+      if (headerColors[j] === namesColor) {
+        columnTypes.push(allColumnTypes.ATTRIBUTES);
+      } else if (headerColors[j] === null) {
+        columnTypes.push(null);
+      } else if (condColor === undefined || headerColors[j] === condColor) {
+        condColor = headerColors[j];
+        columnTypes.push(allColumnTypes.CONDITIONS);
+      } else {
+        inconsist(0, j, `Third background color at column ${j + 1} (must be only two, for the conditions and the attributes)`, [condColor], true);
+      }
+    }
+    check();
   } else if (funcName == "dataGeneratorSub") {
     dataGeneratorSub();
   } else if (funcName == "renameSymbol") {
@@ -1423,8 +1445,13 @@ app.post('/execute', (req, res) => {
     newSheet(body.values);
     
     // Split all the values of 'values' by ";", trim and filter empty strings
-    values0[sheetCodeName] = values0.map((row, i) => i?(row.map((cell) => cell.split(";").map((value) => value.trim()).filter((value) => value !== ""))):row);
+    values0[sheetCodeName] = values0.map(row => row.map((cell) => cell.split(";").map((value) => value.trim()).filter((value) => value !== "")));
   }
+}
+
+// Endpoint to call JavaScript functions
+app.post('/execute', (req, res) => {
+  executeJS(req.body);
   const result = VBARequests;
   res.json({ result });
 });
