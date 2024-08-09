@@ -1,22 +1,16 @@
 const express = require('express');
 
-const ffi = require('ffi-napi');
-
-// Load the C library
-const sortingLib = ffi.Library('./sortingLib', {
-  'sortRows': ['pointer', ['pointer', 'int']]
-});
-
-
+const app = express();
 const port = 3000;
 
+
 // Middleware to parse JSON bodies
-const app = express();
 app.use(express.json());
 
 
 var updateRegularity = 1;
-var values = {};
+var values0 = {};
+var values = [];
 var oldValues = [];
 var indOldValues = 0;
 var perRef = [];
@@ -203,70 +197,9 @@ function handleChange(updates) {
 }
 
 function check() {
-  rowAttributes = [];
-  rowConditions = [];
-  var lowerSt;
-  for(let i = 1; i < nbLineBef; i++) {
-    for(let k = 0; k < values[i][0].length; k++) {
-      lowerSt = values[i][0][k].toLowerCase();
-      if(values[0][0] == namesSt) {
-        for(let r = 1; r <= i; r++) {
-          for(let f = 0; f < (r==i)?k:values[r][0].length; f++) {
-            if(values[r][0][f].toLowerCase() == lowerSt) {
-              sugg_removing_elem(i, 0, k);
-              return -1;
-            }
-          }
-        }
-      }
-    }
-  }
-
-  // Example data: A list of lists of strings
-  let data = [
-    ["row1", ">^hello$"],
-    ["row2", "<(3)'^good'"],
-    ["hello", "some data"],
-    ["goodbye", "more data"],
-    ["good", "even more data"]
-  ];
   
-  // Convert the data to a format that can be passed to C
-  let cData = data.map(row => row.join('\0') + '\0').join('\0').split('').map(c => c.charCodeAt(0));
-  
-  // Call the C function
-  let sortedPtr = sortingLib.sortRows(Buffer.from(cData), data.length);
-  
-  // Process the returned sorted data
-  let sortedData = [];
-  let buffer = new Uint8Array(sortedPtr.readPointer().buffer);
-  let currentRow = [];
-  let currentString = "";
-  for (let i = 0; i < buffer.length; i++) {
-    let char = buffer[i];
-    if (char === 0) {
-      if (currentString) {
-        currentRow.push(currentString);
-        currentString = "";
-      } else {
-        sortedData.push(currentRow);
-        currentRow = [];
-      }
-    } else {
-      currentString += String.fromCharCode(char);
-    }
-  }
-  
-  console.log(sortedData);
-}
-
-function check2() {
-  
-    periods = [];
-    perRef = [None, None];
-    perInt = [None, None];
-    rowAttributes = [None, None];
-    rowConditions = [None, None];
+  data = [0];
+  perInt = [0];
 
   perIntCont = [0];
   var r;
@@ -274,63 +207,18 @@ function check2() {
   for (let i = 1; i < nbLineBef; i++) {
     perInt.push([]);
     perIntCont.push([[], [], []]);
-    perRef.push(-1);
-    if (values[i][colNumb - 1].length == 0) {
-      // if there is no url
-      perRef[i] = -2;
-    }
 
     for (let k = 0; k < values[i][0].length; k++) {
-      if(isTip(i, 0, k)) {
-        return -1;
-      }
-      stop = false;
-      //check if already before
-      for (let r0 = 1; r0 <= i; r0++) {
-        if (r0 == 1) {
-          r = i;
-        } else {
-          r = r0 - 1;
-        }
+      val = values[i][0][k].toLowerCase();
+      //check if name already before
+      for (let r = 1; r <= i; r++) {
         for (let f = 0; f < values[r][0].length; f++) {
-          if ((r == i && f >= k) || !searching(r, 0, f)) {
-            continue;
-          }
-          if (
-            i == r ||
-            (stat == 0 &&
-              (perRef[r] < 0 ||
-                (perRef[i] > -1 && (perRef[i] != perRef[r] || periods[perRef[r]][0] != i)) ||
-                (perRef[i] < 0 && periods[perRef[r]][0] > -1) ||
-                stat2 == 0)) ||
-            (stat > 0 &&
-              ((perRef[i] > -1 && perRef[r] > -1 && perRef[i] != perRef[r] && periods[perRef[r]][stat] > -1) ||
-                (perRef[i] < 0 && perRef[r] > -1 && periods[perRef[r]][stat] > -1)))
-          ) {
+          if ((r < i || f < k) && val==values[i][0][k].toLowerCase()) {
             elem = values[r][0][f];
-            putSugg(i, k);
+            sugg_removing_elem(i, 0, k);
             //   console.log("return4");
             return -1;
           }
-          console.log("stop")
-          stop = true;
-          break;
-        }
-        if (stop) {
-          break;
-        }
-      }
-      if (stat || stop) {
-        if (!stop) {
-          r = i;
-          stat2 = stat;
-        }
-        if (found(r, i, 0, k) == -1) {
-          // console.log("return5");
-          return -1;
-        }
-        if(periods) {
-          console.log(`0periods : ${periods[0][0]} ${stat} ${stop}`)
         }
       }
     }
@@ -339,19 +227,14 @@ function check2() {
   let attNames = [];
   attributes = [];
   let acc = 0;
-  for (let j = 4; j < colNumb - 1; j++) {
+  for (let j = 1; j < colNumb - 1; j++) {
+    if (columnTypes[j] != allColumnTypes.ATTRIBUTES) {
+      continue;
+    }
     attNames.push([]);
     for (let i = 1; i < nbLineBef; i++) {
       for (let k = 0; k < values[i][j].length; k++) {
-        if(isTip(i, j, k)) {
-          return -1;
-        }
-        if (stat) {
-          values[i][j][k] = elem;
-          console.log("sugg2");
-          sugg(i, j);
-          return -1;
-        }
+        val = values[i][j][k].toLowerCase();
         if (j < colNumb - 2) {
           if (perRef[i] != -1) {
             console.log("suggREf0");
@@ -1171,35 +1054,6 @@ function found(r, i, j, k) {
   return 1;
 }
 
-/**
-  * elem <- the value of the referenced cell minus possible prefix
-  * val  <- the value of elem in lowercase
-  * 
-  * @param {integer} i - the row index
-  * @param {integer} j - the column index
-  * @param {integer} k - the index in the cell
-  * @return {integer} - -1 if it is only a prefix, 1 otherwise
-  */
-function isTip(i, j, k) {
-  stat = 0;
-  elem = values[i][j][k];
-  val = elem.toLowerCase();
-  for (let q = 1; q < 3; q++) {
-    if (val.startsWith(perNot[q])) {
-      elem = values[i][j][k].slice(perNot[q].length).trim();
-      val = elem.toLowerCase();
-      if (val == "") {
-        elem = values[i][j][k];
-        putSugg(i, k);
-        return -1;
-      }
-      stat = q;
-      break;
-    }
-  }
-  return 1;
-}
-
 function searching(r, d, f) {
   elem2 = values[r][d][f];
   val2 = elem2.toLowerCase();
@@ -1516,7 +1370,7 @@ app.post('/execute', (req, res) => {
     selectedCells[sheetCodeName] = body.selection;
     handleSelectLinks();
   } else if (funcName === 'chgSheet') {
-    values = values[sheetCodeName];
+    values = values0[sheetCodeName];
     sheetCodeName = body.sheetCodeName;
 
     // body.headerColors is the color of each column. Check if body.headerColors has at most two different colors and a 'none'. If there is more, display the index of the first column trespassing the condition
@@ -1563,13 +1417,13 @@ app.post('/execute', (req, res) => {
   } else if (funcName == "ctrlY") {
     ctrlY();
   } else if (funcName == "newSheet") {
-    values = [];
+    values0[sheetCodeName] = [];
     sorting[sheetCodeName] = false;
     prevLine[sheetCodeName] = 0;
     newSheet(body.values);
     
     // Split all the values of 'values' by ";", trim and filter empty strings
-    values = values.map((row, i) => i?(row.map((cell) => cell.split(";").map((value) => value.trim()).filter((value) => value !== ""))):row);
+    values0[sheetCodeName] = values0.map((row, i) => i?(row.map((cell) => cell.split(";").map((value) => value.trim()).filter((value) => value !== ""))):row);
   }
   const result = VBARequests;
   res.json({ result });

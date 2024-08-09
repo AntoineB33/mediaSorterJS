@@ -15,7 +15,7 @@ Public cellWithError As range
 
 
 Private Sub Workbook_Open()
-    Call Shell("cmd.exe /C C:\Users\abarb\Documents\health\news_underground\mediaSorter\programs\excel_prog\wind_compat\Excel_dev\startNodeJS.bat", vbHide)
+    Call Shell("cmd.exe /C C:\Users\abarb\Documents\health\news_underground\mediaSorter\programs\excel_prog\mediaSorter\my-js-server\startNodeJS.bat", vbHide)
     timerStarted = False
     lastIsChg = False
     Set requests = New Collection
@@ -183,7 +183,6 @@ End Sub
 
 Private Sub Workbook_SheetActivate(ByVal Sh As Object)
     sheetCodeName = Sh.codeName
-    CallJavaScriptFunctionAsync "chgSheet", False, "sheetCodeName", sheetCodeName
     If Not sheetList.Exists(sheetCodeName) Then
         ' Get the used range
         Dim usedRange As range
@@ -210,6 +209,7 @@ Private Sub Workbook_SheetActivate(ByVal Sh As Object)
         relativesListCells.Add sheetCodeName, emptyList
         targetAddress.Add sheetCodeName, Application.Selection.Address
     End If
+    CallJavaScriptFunctionAsync "chgSheet", False, "sheetCodeName", sheetCodeName
     CallJavaScriptFunctionAsync "selectionChange", True, "selection", targetAddress(sheetCodeName), "headerColors", headerColors
     Set sheetVBA = Sh
 End Sub
@@ -283,7 +283,7 @@ End Sub
 Private Sub Workbook_BeforeClose(Cancel As Boolean)
     ThisWorkbook.Save
     ' Stop the Spring Boot application
-    Call Shell("cmd.exe /C C:\Users\abarb\Documents\health\news_underground\mediaSorter\programs\excel_prog\wind_compat\Excel_dev\stopNodeJS.bat", vbHide)
+    Call Shell("cmd.exe /C C:\Users\abarb\Documents\health\news_underground\mediaSorter\programs\excel_prog\mediaSorter\my-js-server\stopNodeJS.bat", vbHide)
 End Sub
 
 Public Sub CallJavaScriptFunctionAsync(ByVal funcName As String, ParamArray params() As Variant)
