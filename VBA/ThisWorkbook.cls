@@ -8,11 +8,7 @@ Dim sorting As Object
 Dim sheetCodeName As String
 Dim targetAddress As Object
 
-Public cellWithError As Object
-Public suggestions As Object
-Public cellsWithWarning As Object
-Public cellsLink As Object
-Public cellsLinkInd As Integer
+Public listBoxList As Object
 
 
 Private Sub Workbook_Open()
@@ -96,6 +92,7 @@ Public Sub CheckHttpResponse()
                             Set range = sheet.range(sheet.Cells(CInt(VBARequestParts(1)) + 1, 1), sheet.Cells(CInt(VBARequestParts(1)) + 1, 1))
                             range.Select
                         Case "linkToCell"
+                            listBoxList[
                             Erase LinkToCellList
                             chgBckCol = item(key)(4)
                             UserForm1.LinkToCell.Clear

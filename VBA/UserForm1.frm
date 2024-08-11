@@ -65,34 +65,17 @@ Private Sub LinkToCell_Click()
         If acc2 < index and index < acc Then
             Dim subItem As Variant
             For Each subItem In item(1)(index - acc2)
-                Select subItem.Keys
-                    Case "select"
-                    Case "newVal"
-                    Case "newBgCol"
+                Select Case subItem.Keys
+                Case "select"
+                    subItem.Value.Select
+                Case "newVal"
+                    subItem.Value(0).Value = subItem.Value(1)
+                Case "newBgCol"
+                    subItem.Value(0).Interior.Color = subItem.Value(1)
                 End Select
             Exit For
         End If
     Next item
-
-    
-    ' Get the corresponding cell address from the RelativesListAddresses array
-    If index > 0 And index <= UBound(ThisWorkbook.RelativesListAddresses) Then
-        If ThisWorkbook.relativesListCells(index) Then
-            ThisWorkbook.relativesListCells(index).Select
-        Else
-            selectedAddress = ThisWorkbook.RelativesListAddresses(index)
-            ThisWorkbook.relativesListCells(index) = sheetVBA.Range(selectedAddress)
-            ThisWorkbook.relativesListCells(index).Select
-        End If
-    Else
-        MsgBox "Invalid selection."
-    End If
-
-
-
-    On Error Resume Next ' ignore the error if the corresponding sheet is not active
-    ThisWorkbook.cellWithError.Select
-    On Error GoTo 0
 End Sub
 
 Private Sub suggestionList_Click()

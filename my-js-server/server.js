@@ -1139,7 +1139,7 @@ function suggSet(i, j, sugg) {
 }
 
 function inconsist(i, j, message, sugg, chgBckCol = false) {
-  response.append({ "linkToCell": [j + 1, i + 1, message, sugg, chgBckCol] });
+  response.append({ "linkToCell": [[[i, j]],[]][j + 1, i + 1, message, sugg, chgBckCol] });
 }
 
 function findNewName(name, checked = true) {
