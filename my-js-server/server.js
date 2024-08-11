@@ -10,7 +10,6 @@ app.use(express.json());
 
 
 var updateRegularity = 1;
-var values_orig = {};
 var values0 = {};
 var values = [];
 var oldValues = [];
@@ -44,7 +43,7 @@ var headerNames;
 var nameInd;
 
 // [node.js]
-var VBARequests;
+var response;
 
 
 const allColumnTypes = {
@@ -100,7 +99,7 @@ function handleSelectLinks() {
     if(perRef[row] > -1) {
       for(let g = 0; g < 3; g++) {
         if(periods[perRef[row]][g] < nbLineBef && periods[perRef[row]][g]!=row) {
-          VBARequests += `addItem:${periods[perRef[row]][g]}`;
+          response.append({ "addItem": [periods[perRef[row]][g]] });
         }
       }
     }
@@ -116,11 +115,11 @@ function handleSelectLinks() {
               if(perRef[r] > -1) {
                 for(let g = 0; g < 3; g++) {
                   if(periods[perRef[r]][g]!=-1) {
-                    VBARequests += `addItem:${r};`;
+                    response.append({ "addItem": [r] });
                   }
                 }
               } else {
-                VBARequests += `addItem:${r};`;
+                response.append({ "addItem": [r] });
               }
             }
           }
@@ -131,7 +130,7 @@ function handleSelectLinks() {
           for(let d = 4; d < colNumb - 1; d++) {
             for(let f = 0; f < values[r][d].length; f++) {
               if(row!=r && searching(r, d, f)) {
-                VBARequests += `addItem:${r};`;
+                response.append({ "addItem": [r] });
               }
             }
           }
@@ -146,7 +145,7 @@ function handleChange(updates) {
     var row = update[0] - 1;  // Adjusting for zero-based index
     var column = update[1] - 1;  // Adjusting for zero-based index
     var value = update[2];
-    values_orig[sheetCodeName][row][column] = value;
+    values0[sheetCodeName][row][column] = value;
     var splitValue = value;
     if(value) {
       splitValue = value
@@ -1001,16 +1000,16 @@ function check() {
       prevLine[sheetCodeName] = i + 1;
     }
     if(colors[i]!=color || fonts[i]!=font || updateRegularity) {
-      VBARequests += `range_updateRegularity:${i + 1}:${colNumb-1};`;
+      response.append({ "range_updateRegularity": [i + 1, colNumb-1] });
       if(colors[i]!=color || updateRegularity) {
         if(color) {
-          VBARequests += `color_updateRegularity:${color};`;
+          response.append({ "color_updateRegularity": [color] });
         } else {
-          VBARequests += `clear_updateRegularity;`;
+          response.append({ "clear_updateRegularity": [] });
         }
       }
       if(fonts[i]!=font || updateRegularity) {
-        VBARequests += `font_updateRegularity:${font};`;
+        response.append({ "font_updateRegularity": [font] });
       }
       colors[i]=color
       fonts[i]=font
@@ -1019,9 +1018,9 @@ function check() {
   iL = Math.min(prevLine[sheetCodeName], prevLineBef);
   iU = Math.max(prevLine[sheetCodeName], prevLineBef);
   for(let i = iL; i<iU; i++) {
-    VBARequests += `styleBorders:${i}:${0}:${colNumb}:${iL == prevLineBef};`;
+    response.append({ "styleBorders": [i, 0, colNumb, iL == prevLineBef] });
   }
-  VBARequests += `checkSuccess;`;
+  response.append({ "checkSuccess": [] });
   resolved[sheetCodeName] = true;
   handleSelectLinks();
 }
@@ -1140,7 +1139,7 @@ function suggSet(i, j, sugg) {
 }
 
 function inconsist(i, j, message, sugg, chgBckCol = false) {
-  VBARequests += `linkToCell:${j + 1}:${i + 1}:${message}:${sugg}:${chgBckCol};`;
+  response.append({ "linkToCell": [j + 1, i + 1, message, sugg, chgBckCol] });
 }
 
 function findNewName(name, checked = true) {
@@ -1180,7 +1179,7 @@ function correct() {
       let value = values[i][j].join("; ");
       if (values0[i][j] != value) {
         values0[i][j] = value;
-        VBARequests += `chgValue:${i + 1}:${j + 1}:$${value};`;
+        response.append({ "chgValue": [i + 1, j + 1, value] });
       }
     }
   }
@@ -1308,7 +1307,7 @@ function dataGeneratorSub() {
           // })
           .join("\t")
       ).join("\n");
-  VBARequests += `sort:${result};`;
+  response.append({ "sort": [result] });
 
 
 }
@@ -1351,7 +1350,7 @@ function renameSymbol(oldValue, newValue) {
     }
   }
   correct();
-  VBARequests += `Renamings:renamed (${nbRen})`
+  response.append({ "Renamings": [`renamed (${nbRen})`] });
   check();
 }
 
@@ -1364,8 +1363,8 @@ function handleoldNameInputClick() {
 
     rowId = Math.min(rowId, range.rowIndex);
   }
-  VBARequests += `oldNameInput:${values[rowId][0].join("; ")};`;
-  VBARequests += `newNameInput:${values[rowId][0].join("; ")};`;
+  response.append({ "oldNameInput": [values[rowId][0].join("; ")] });
+  response.append({ "newNameInput": [values[rowId][0].join("; ")] });
 }
 
 function ctrlZ() {
@@ -1408,7 +1407,7 @@ function checkSquarBrackets(i) {
 }
 
 function executeJS(body) {
-  VBARequests = ``;
+  response = [];
   const funcName = body.functionName;
   if (funcName === 'handleChange') {
     handleChange(body.changes);
@@ -1428,8 +1427,8 @@ function executeJS(body) {
     for(let j = 0; j < values[0].length; i++) {
       alreadyLabelled = "";
       values[0][j] = values[0][j].split(";").map((value) => value.trim()).filter((value) => value !== "");
-      for(let k = 0; k < titles.length; k++) {
-        let name = titles[k];
+      for(let k = 0; k < values[0][j].length; k++) {
+        let name = values[0][j][k];
         if(name in allColumnNames) {
           if(alreadyLabelled) {
             inconsist_removing_elem(0, j, k, `Column ${j} labelled as "${alreadyLabelled}" and ${name}.`);
@@ -1488,7 +1487,7 @@ function executeJS(body) {
   } else if (funcName == "ctrlY") {
     ctrlY();
   } else if (funcName == "newSheet") {
-    values_orig[sheetCodeName] = body.values;
+    values0[sheetCodeName] = body.values;
     sorting[sheetCodeName] = false;
     prevLine[sheetCodeName] = 0;
   }
@@ -1497,8 +1496,7 @@ function executeJS(body) {
 // Endpoint to call JavaScript functions
 app.post('/execute', (req, res) => {
   executeJS(req.body);
-  const result = VBARequests;
-  res.json({ result });
+  res.json(response);
 });
 
 app.listen(port, () => {

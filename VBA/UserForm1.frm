@@ -55,16 +55,25 @@ Private Sub LinkToCell_Click()
     ' Get the index of the selected item
     index = LinkToCell.ListIndex
 
-    With ThisWorkbook
-        If index < .cellsLinkInd[0] Then
-        Else If index > .cellsLinkInd[0] + 1 && index < .cellsLinkInd[1] Then
-            index -= .cellsLinkInd[0]
-        Else If index > .cellsLinkInd[1] + 1 && index < .cellsLinkInd[2] Then
-            index -= .cellsLinkInd[1]
-        Else If index > .cellsLinkInd[2] + 1 Then
-            index -= .cellsLinkInd[2]
+    Dim item As Variant
+    Dim acc As Integer
+    Dim acc2 As Integer
+    acc = 0
+    For Each item In ThisWorkbook.listBoxList
+        acc2 = acc + Ubound(item(0))
+        acc = acc2 + Ubound(item(1))
+        If acc2 < index and index < acc Then
+            Dim subItem As Variant
+            For Each subItem In item(1)(index - acc2)
+                Select subItem.Keys
+                    Case "select"
+                    Case "newVal"
+                    Case "newBgCol"
+                End Select
+            Exit For
         End If
-    End With
+    Next item
+
     
     ' Get the corresponding cell address from the RelativesListAddresses array
     If index > 0 And index <= UBound(ThisWorkbook.RelativesListAddresses) Then

@@ -8,9 +8,10 @@ Dim sorting As Object
 Dim sheetCodeName As String
 Dim targetAddress As Object
 
-Public cellWithError As range
-Public chgBckCol As Boolean
-Public cellWithWarning As range
+Public cellWithError As Object
+Public suggestions As Object
+Public cellsWithWarning As Object
+Public cellsLink As Object
 Public cellsLinkInd As Integer
 
 
@@ -48,12 +49,21 @@ Private Sub Workbook_Open()
     Set sheetList = CreateObject("Scripting.Dictionary")
     Set sorting = CreateObject("Scripting.Dictionary")
     Set targetAddress = CreateObject("Scripting.Dictionary")
+    Set cellWithError = CreateObject("Scripting.Dictionary")
+    Set suggestions = CreateObject("Scripting.Dictionary")
+    Set cellsWithWarning = CreateObject("Scripting.Dictionary")
+    Set cellsLink = CreateObject("Scripting.Dictionary")
+    Set cellsLinkInd = CreateObject("Scripting.Dictionary")
     Workbook_SheetActivate activeSheet
 End Sub
 
 Public Sub CheckHttpResponse()
     Dim i As Long
     Dim http As Object
+    Dim jsonResponse As String
+    Dim jsonArray As Object
+    Dim item As Variant
+    Dim key As Variant
     Dim range As range
     Dim rangeCol As range
     Dim arr() As Variant
@@ -64,95 +74,93 @@ Public Sub CheckHttpResponse()
             If http.Status = 200 Then
                 sheetCodeName = requests(j).sheetCodeName
                 Set sheet = sheetList(sheetCodeName)
-                Dim result As String
-                result = http.responseText
-                Dim json As Object
-                Set json = JsonConverter.ParseJson(http.responseText)
-                VBARequests = json("result")
-                Dim VBARequestsArray() As String
-                VBARequestsArray = Split(VBARequests, ";")
-                For i = LBound(VBARequestsArray) To UBound(VBARequestsArray)
-                    Dim VBARequestParts() As String
-                    VBARequestParts = Split(VBARequestsArray(i), ":")
-                    Select Case VBARequestParts(0)
-                    Case "styleBorders"
-                        styleBorders CInt(VBARequestParts(1)), CInt(VBARequestParts(2)), CInt(VBARequestParts(3)), CBool(VBARequestParts(5))
-                    Case "chgValue"
-                        Set cell = sheet.Cells(CInt(VBARequestParts(2)), CInt(VBARequestParts(1)))
-                        cell.Value = VBARequestParts(3)
-                    Case "range_updateRegularity"
-                        Set range = sheet.range(sheet.Cells(VBARequestParts(1), 1), sheet.Cells(VBARequestParts(1), VBARequestParts(2)))
-                    Case "color_updateRegularity"
-                        range.Interior.Color = VBARequestParts(1)
-                    Case "clear_updateRegularity"
-                        range.Interior.Color = xlNone
-                    Case "font_updateRegularity"
-                        range.Font.Color = VBARequestParts(1)
-                    Case "select"
-                        Set range = sheet.range(sheet.Cells(CInt(VBARequestParts(1)) + 1, 1), sheet.Cells(CInt(VBARequestParts(1)) + 1, 1))
-                        range.Select
-                    Case "linkToCell"
-                        chgBckCol = CBool(VBARequestParts(5))
-                        For Each suggestionText In suggestions
-                            UserForm1.LinkToCell.AddItem listItem
-                        Next suggestionText
-                        updateSuggestions(CInt(VBARequestParts(1)), CInt(VBARequestParts(2)), CInt(VBARequestParts(4)))
-                        Set cellWithError = sheet.Cells(CInt(VBARequestParts(2)), CInt(VBARequestParts(1)))
-                        UserForm1.LinkToCell.AddItem VBARequestParts(3)
-                    Case "sort"
-                        Dim fullName As String
-                        fullName = ThisWorkbook.Name
-                        Dim suffix As String
-                        suffix = Left(fullName, InStrRev(fullName, ".") - 1) & "\" & sheet.Name
-                        Dim filePath As String
-                        filePath = dataFolderPath & suffix & ".txt"
-                        Dim fileNumber As Integer
+                jsonResponse = http.responseText
+                Set jsonArray = JsonConverter.ParseJson(jsonResponse)
+                For Each item In jsonArray
+                    For Each key In item.Keys
+                        Select Case key
+                        Case "styleBorders"
+                            styleBorders CInt(VBARequestParts(1)), CInt(VBARequestParts(2)), CInt(VBARequestParts(3)), CBool(VBARequestParts(5))
+                        Case "chgValue"
+                            Set cell = sheet.Cells(CInt(VBARequestParts(2)), CInt(VBARequestParts(1)))
+                            cell.Value = VBARequestParts(3)
+                        Case "range_updateRegularity"
+                            Set range = sheet.range(sheet.Cells(VBARequestParts(1), 1), sheet.Cells(VBARequestParts(1), VBARequestParts(2)))
+                        Case "color_updateRegularity"
+                            range.Interior.Color = VBARequestParts(1)
+                        Case "clear_updateRegularity"
+                            range.Interior.Color = xlNone
+                        Case "font_updateRegularity"
+                            range.Font.Color = VBARequestParts(1)
+                        Case "select"
+                            Set range = sheet.range(sheet.Cells(CInt(VBARequestParts(1)) + 1, 1), sheet.Cells(CInt(VBARequestParts(1)) + 1, 1))
+                            range.Select
+                        Case "linkToCell"
+                            Erase LinkToCellList
+                            chgBckCol = item(key)(4)
+                            UserForm1.LinkToCell.Clear
+                            UserForm1.LinkToCell.AddItem "------------"
+                            UserForm1.LinkToCell.AddItem item(key)(2)
+                            UserForm1.LinkToCell.AddItem "------------"
+                            For Each suggestionText In item(key)(3)
+                                UserForm1.LinkToCell.AddItem suggestionText
+                            Next suggestionText
+                            Set cellWithError = sheet.Cells(item(key)(1), item(key)(0))
+                        Case "sort"
+                            Dim fullName As String
+                            fullName = ThisWorkbook.Name
+                            Dim suffix As String
+                            suffix = Left(fullName, InStrRev(fullName, ".") - 1) & "\" & sheet.Name
+                            Dim filePath As String
+                            filePath = dataFolderPath & suffix & ".txt"
+                            Dim fileNumber As Integer
 
-                        
-                        ' Check if the directory exists, if not, create it
-                        If Dir(dataFolderName, vbDirectory) = "" Then
-                            MkDir dataFolderName
-                        End If
+                            
+                            ' Check if the directory exists, if not, create it
+                            If Dir(dataFolderName, vbDirectory) = "" Then
+                                MkDir dataFolderName
+                            End If
 
-                        ' Open the file for writing
-                        fileNumber = FreeFile
-                        Open filePath For Output As fileNumber
+                            ' Open the file for writing
+                            fileNumber = FreeFile
+                            Open filePath For Output As fileNumber
 
-                        Dim linesToWriteInFile() As String
-                        linesToWriteInFile = Split(VBARequestParts(1), vbLf)
-                        For Each Line In linesToWriteInFile
-                            Print #fileNumber, Line
-                        Next Line
+                            Dim linesToWriteInFile() As String
+                            linesToWriteInFile = Split(VBARequestParts(1), vbLf)
+                            For Each Line In linesToWriteInFile
+                                Print #fileNumber, Line
+                            Next Line
 
-                        ' Close the file
-                        Close fileNumber
-                        
-                        Dim cFilePath As String
-                        cFilePath = Root & "programs\c_prog\Project2\x64\Debug\Project2.exe " & suffix
-                        'ExecuteCFile cFilePath
-                    Case "sorting"
-                        sorting(sheetCodeName) = Not sorting(sheetCodeName)
-                    Case "clearRelativesList"
-                        UserForm1.RelativesList.Clear
-                    Case "addItem"
-                        ' Initialize the RelativesListAddresses array to the size of the data range
-                        arr = relativesListCells(sheetCodeName)
-                        ReDim arr(1 To UBound(RelativesListAddresses(sheetCodeName)))
-                        arr = RelativesListAddresses(sheetCodeName)
-                        ReDim arr(1 To UBound(RelativesListAddresses(sheetCodeName)) + 1)
-                        UserForm1.RelativesList.AddItem VBARequestParts(1)
-                        arr(UBound(arr)) = VBARequestParts(2)
-                    Case "Renamings"
-                        With UserForm1.renamings
-                            .Caption = VBARequestParts(1)
-                            .Visible = True
-                        End With
-                    Case "oldNameInput"
-                        UserForm1.oldNameInput.Text = VBARequestParts(1)
-                    Case "newNameInput"
-                        UserForm1.newNameInput.Text = VBARequestParts(1)
-                    End Select
-                Next i
+                            ' Close the file
+                            Close fileNumber
+                            
+                            Dim cFilePath As String
+                            cFilePath = Root & "programs\c_prog\Project2\x64\Debug\Project2.exe " & suffix
+                            'ExecuteCFile cFilePath
+                        Case "sorting"
+                            sorting(sheetCodeName) = Not sorting(sheetCodeName)
+                        Case "clearRelativesList"
+                            UserForm1.RelativesList.Clear
+                        Case "addItem"
+                            ' Initialize the RelativesListAddresses array to the size of the data range
+                            arr = relativesListCells(sheetCodeName)
+                            ReDim arr(1 To UBound(RelativesListAddresses(sheetCodeName)))
+                            arr = RelativesListAddresses(sheetCodeName)
+                            ReDim arr(1 To UBound(RelativesListAddresses(sheetCodeName)) + 1)
+                            UserForm1.RelativesList.AddItem VBARequestParts(1)
+                            arr(UBound(arr)) = VBARequestParts(2)
+                        Case "Renamings"
+                            With UserForm1.renamings
+                                .Caption = VBARequestParts(1)
+                                .Visible = True
+                            End With
+                        Case "oldNameInput"
+                            UserForm1.oldNameInput.Text = VBARequestParts(1)
+                        Case "newNameInput"
+                            UserForm1.newNameInput.Text = VBARequestParts(1)
+                        End Select
+                    Next key
+                Next item
                 requests.Remove j
             Else
                 MsgBox "Error: " & http.statusText
@@ -200,6 +208,11 @@ Private Sub Workbook_SheetActivate(ByVal Sh As Object)
         RelativesListAddresses.Add sheetCodeName, emptyList
         relativesListCells.Add sheetCodeName, emptyList
         targetAddress.Add sheetCodeName, Application.Selection.Address
+        cellWithError.Add sheetCodeName, Null
+        suggestions.Add sheetCodeName, Null
+        cellsWithWarning.Add sheetCodeName, Null
+        cellsLink.Add sheetCodeName, Null
+        cellsLinkInd.Add sheetCodeName, Array(0, )
     End If
     CallJavaScriptFunctionAsync "chgSheet", False, "sheetCodeName", sheetCodeName
     CallJavaScriptFunctionAsync "selectionChange", True, "selection", targetAddress(sheetCodeName), "headerColors", headerColors
