@@ -6,13 +6,12 @@ Dim sheetVBA As Worksheet
 Dim sheet As Worksheet
 Dim sorting As Object
 Dim sheetCodeName As String
-Dim RelativesListAddresses As Object
-Dim relativesListCells As Object
 Dim targetAddress As Object
 
 Public cellWithError As range
 Public chgBckCol As Boolean
-
+Public cellWithWarning As range
+Public cellsLinkInd As Integer
 
 
 Private Sub Workbook_Open()
@@ -48,8 +47,6 @@ Private Sub Workbook_Open()
 
     Set sheetList = CreateObject("Scripting.Dictionary")
     Set sorting = CreateObject("Scripting.Dictionary")
-    Set RelativesListAddresses = CreateObject("Scripting.Dictionary")
-    Set relativesListCells = CreateObject("Scripting.Dictionary")
     Set targetAddress = CreateObject("Scripting.Dictionary")
     Workbook_SheetActivate activeSheet
 End Sub
@@ -96,13 +93,12 @@ Public Sub CheckHttpResponse()
                         range.Select
                     Case "linkToCell"
                         chgBckCol = CBool(VBARequestParts(5))
+                        For Each suggestionText In suggestions
+                            UserForm1.LinkToCell.AddItem listItem
+                        Next suggestionText
                         updateSuggestions(CInt(VBARequestParts(1)), CInt(VBARequestParts(2)), CInt(VBARequestParts(4)))
                         Set cellWithError = sheet.Cells(CInt(VBARequestParts(2)), CInt(VBARequestParts(1)))
-                        UserForm1.linkToCell.Visible = True
-                        With UserForm1.suggestionList
-                            .AddItem VBARequestParts(3)
-                            .Visible = True
-                        End With
+                        UserForm1.LinkToCell.AddItem VBARequestParts(3)
                     Case "sort"
                         Dim fullName As String
                         fullName = ThisWorkbook.Name
@@ -251,28 +247,6 @@ Sub styleBorders(i As Integer, jL As Integer, jU As Integer, draw As Boolean)
             cell.Borders(xlEdgeRight).LineStyle = xlNone
         End If
     Next j
-End Sub
-
-Sub updateSuggestions(i As Integer, j As Integer, suggestions As Variant)
-    Dim suggestionList As Object
-    Set suggestionList = UserForm1.suggestionList
-
-    Dim suggestionText As Variant
-    For Each suggestionText In suggestions
-        Dim listItem As Object
-        Set listItem = UserForm1.Controls.Add("Forms.Listbox.1", , True)
-        listItem.AddItem suggestionText
-        listItem.Tag = suggestionText
-        listItem.Width = 200
-        listItem.Height = 20
-        listItem.Left = 10
-        listItem.Top = 10 + 20 * (suggestionList.ListCount - 1)
-        listItem.Visible = True
-        suggestionList.AddItem listItem
-    Next suggestionText
-
-    suggestionList.Visible = (suggestionList.ListCount <> 0)
-    UserForm1.linkToCell.Visible = (suggestionList.ListCount <> 0)
 End Sub
 
 Private Sub Workbook_BeforeClose(Cancel As Boolean)

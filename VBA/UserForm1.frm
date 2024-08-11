@@ -48,21 +48,53 @@ Private Sub newNameInput_KeyDown(ByVal KeyCode As MSForms.ReturnInteger, ByVal S
     End If
 End Sub
 
-Private Sub linkToCell_Click()
+Private Sub LinkToCell_Click()
+    Dim selectedAddress As String
+    Dim index As Integer
+    
+    ' Get the index of the selected item
+    index = LinkToCell.ListIndex
+
+    With ThisWorkbook
+        If index < .cellsLinkInd[0] Then
+        Else If index > .cellsLinkInd[0] + 1 && index < .cellsLinkInd[1] Then
+            index -= .cellsLinkInd[0]
+        Else If index > .cellsLinkInd[1] + 1 && index < .cellsLinkInd[2] Then
+            index -= .cellsLinkInd[1]
+        Else If index > .cellsLinkInd[2] + 1 Then
+            index -= .cellsLinkInd[2]
+        End If
+    End With
+    
+    ' Get the corresponding cell address from the RelativesListAddresses array
+    If index > 0 And index <= UBound(ThisWorkbook.RelativesListAddresses) Then
+        If ThisWorkbook.relativesListCells(index) Then
+            ThisWorkbook.relativesListCells(index).Select
+        Else
+            selectedAddress = ThisWorkbook.RelativesListAddresses(index)
+            ThisWorkbook.relativesListCells(index) = sheetVBA.Range(selectedAddress)
+            ThisWorkbook.relativesListCells(index).Select
+        End If
+    Else
+        MsgBox "Invalid selection."
+    End If
+
+
+
     On Error Resume Next ' ignore the error if the corresponding sheet is not active
     ThisWorkbook.cellWithError.Select
     On Error GoTo 0
 End Sub
 
 Private Sub suggestionList_Click()
-    UserForm1.suggestionList.Visible = False
+    suggestionList.Visible = False
     suggestionList.Clear
     If ThisWorkbook.chgBckCol Then
         ThisWorkbook.cellWithError.Interior.Color = suggestionList.Value
     Else
         ThisWorkbook.cellWithError.Value = suggestionList.Value
     End If
-    UserForm1.linkToCell.Visible = False
+    linkToCell.Visible = False
     linkToCell.Clear
 End Sub
 
