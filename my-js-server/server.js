@@ -56,6 +56,19 @@ const allColumnNames = {
   MEDIA: "media"
 };
 
+const msgType = {
+  ERROR: 0,
+  WARNING: 1,
+  SUGGESTION: 2,
+  RELATIVES: 3
+};
+
+const Actions = {
+  Select: 1,
+  NewVal: 2,
+  NewBgCol: 3
+}
+
 
 /**
  * Converts a given 0-based integer to its corresponding Excel column tag.
@@ -1138,8 +1151,15 @@ function suggSet(i, j, sugg) {
   inconsist(i, j, "Error at " + cellAddress, sugg);
 }
 
-function inconsist(i, j, message, sugg, chgBckCol = false) {
-  response.append({ "linkToCell": [[[i, j]],[]][j + 1, i + 1, message, sugg, chgBckCol] });
+function inconsist(i, j, message, suggs, action = Actions.NewVal) {
+  response.append({ "listBoxList": [msgType.ERROR, message, [[Actions.Select, [i, j]]]] });
+  suggs.forEach(sugg => {
+    let newVal = sugg;
+    if (action == Actions.NewVal) {
+      newVal = sugg.join("; ");
+    }
+    response.append({ "listBoxList": [msgType.SUGGESTION, newVal, [[Actions.Select, 0], [action, 0, newVal]]] });
+  });
 }
 
 function findNewName(name, checked = true) {

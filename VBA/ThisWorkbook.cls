@@ -1,3 +1,8 @@
+Dim msgTypeColors(3) As Integer
+msgTypeColors(0) = RGB(255, 0, 0)
+msgTypeColors(1) = RGB(255, 137, 0)
+msgTypeColors(2) = RGB(0, 145, 255)
+
 Dim sheetList As Object
 Dim requests As Collection
 Dim timerStarted As Boolean
@@ -9,6 +14,20 @@ Dim sheetCodeName As String
 Dim targetAddress As Object
 
 Public listBoxList As Object
+
+
+Enum Actions
+    Select = 1
+    NewVal = 2
+    NewBgCol = 3
+End Enum
+
+Enum msgType
+    ERROR = 0
+    WARNING = 1
+    SUGGESTION = 2
+    RELATIVES = 3
+End Enum
 
 
 Private Sub Workbook_Open()
@@ -45,13 +64,31 @@ Private Sub Workbook_Open()
     Set sheetList = CreateObject("Scripting.Dictionary")
     Set sorting = CreateObject("Scripting.Dictionary")
     Set targetAddress = CreateObject("Scripting.Dictionary")
-    Set cellWithError = CreateObject("Scripting.Dictionary")
-    Set suggestions = CreateObject("Scripting.Dictionary")
-    Set cellsWithWarning = CreateObject("Scripting.Dictionary")
-    Set cellsLink = CreateObject("Scripting.Dictionary")
-    Set cellsLinkInd = CreateObject("Scripting.Dictionary")
+    Set listBoxList = CreateObject("Scripting.Dictionary")
     Workbook_SheetActivate activeSheet
 End Sub
+
+Function MoveColorMidwayToWhite(originalColor As Long) As Long
+    Dim r As Integer
+    Dim g As Integer
+    Dim b As Integer
+    Dim newR As Integer
+    Dim newG As Integer
+    Dim newB As Integer
+    
+    ' Extract the red, green, and blue components from the original color
+    r = originalColor Mod 256
+    g = (originalColor \ 256) Mod 256
+    b = (originalColor \ 65536) Mod 256
+    
+    ' Calculate the midway color components
+    newR = (r + 255) \ 2
+    newG = (g + 255) \ 2
+    newB = (b + 255) \ 2
+    
+    ' Return the new color as a VBA RGB color value
+    MoveColorMidwayToWhite = RGB(newR, newG, newB)
+End Function
 
 Public Sub CheckHttpResponse()
     Dim i As Long
@@ -63,6 +100,8 @@ Public Sub CheckHttpResponse()
     Dim range As range
     Dim rangeCol As range
     Dim arr() As Variant
+    Dim currentMsgType As Integer
+    Dim color As Long
 
     For j = requests.Count To 1 Step -1
         Set http = requests(j).http
@@ -91,9 +130,46 @@ Public Sub CheckHttpResponse()
                         Case "select"
                             Set range = sheet.range(sheet.Cells(CInt(VBARequestParts(1)) + 1, 1), sheet.Cells(CInt(VBARequestParts(1)) + 1, 1))
                             range.Select
-                        Case "linkToCell"
+                        Case "listBoxList"
+                            If item(key)(0) <> msgType.SUGGESTION Then
+                                Dim r As Integer
+                                Dim g As Integer
+                                Dim b As Integer
+                                Dim newR As Integer
+                                Dim newG As Integer
+                                Dim newB As Integer
+                                r = color Mod 256
+                                g = (color \ 256) Mod 256
+                                b = (color \ 65536) Mod 256
+                                newR = (r + 255) \ 2
+                                newG = (g + 255) \ 2
+                                newB = (b + 255) \ 2
+                                color = RGB(newR, newG, newB)
+                            Else
+                                currentMsgType = item(key)(0)
+                                color = msgTypeColors(currentMsgType)
+                            End If
+                            
+                            ' Create a new label
+                            Set newLabel = UserForm1.Controls.Add("Forms.Label.1")
+                            With newLabel
+                                .Caption = item(key)(1)
+                                .Top = 10 + (i * 20)
+                                .Left = 10
+                                .Width = 100
+                                .Height = 15
+                                
+                                ' Assign a unique name or tag
+                                .Name = "ListSugg" & currentMsgType & "-" & UBound(listBoxList(sheetCodeName)(currentMsgType))
+                                .Tag = "ListSugg"
+                                
+                                ' Set colors for each item
+                                .BackColor = color
+                            End With
+
+                            
                             listBoxList[
-                            Erase LinkToCellList
+                            Erase listBoxList
                             chgBckCol = item(key)(4)
                             UserForm1.LinkToCell.Clear
                             UserForm1.LinkToCell.AddItem "------------"
@@ -205,11 +281,9 @@ Private Sub Workbook_SheetActivate(ByVal Sh As Object)
         RelativesListAddresses.Add sheetCodeName, emptyList
         relativesListCells.Add sheetCodeName, emptyList
         targetAddress.Add sheetCodeName, Application.Selection.Address
-        cellWithError.Add sheetCodeName, Null
-        suggestions.Add sheetCodeName, Null
-        cellsWithWarning.Add sheetCodeName, Null
-        cellsLink.Add sheetCodeName, Null
-        cellsLinkInd.Add sheetCodeName, Array(0, )
+        Dim newCollection As Collection
+        Collection = New Collection
+        listBoxList.Add sheetCodeName, Collection
     End If
     CallJavaScriptFunctionAsync "chgSheet", False, "sheetCodeName", sheetCodeName
     CallJavaScriptFunctionAsync "selectionChange", True, "selection", targetAddress(sheetCodeName), "headerColors", headerColors

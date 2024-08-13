@@ -1,4 +1,6 @@
 
+
+
 Private Sub SortButton_Click()
     sheetVBA.Protect UserInterfaceOnly:=sorting(sheetCodeName)
     If sorting(sheetCodeName) Then
@@ -48,6 +50,31 @@ Private Sub newNameInput_KeyDown(ByVal KeyCode As MSForms.ReturnInteger, ByVal S
     End If
 End Sub
 
+Sub LabelClicked()
+    Dim clickedLabel As MSForms.Label
+    
+    ' Identify which label was clicked
+    Set clickedLabel = Me.Controls(Application.Caller)
+    
+    ' Show message based on the clicked label
+    MsgBox "You clicked: " & clickedLabel.Caption, vbInformation
+End Sub
+
+Sub RemoveDynamicLabels()
+    Dim ctrl As MSForms.Control
+    Dim i As Integer
+    
+    ' Loop through all controls in the UserForm
+    For i = Me.Controls.Count - 1 To 0 Step -1
+        Set ctrl = Me.Controls(i)
+        
+        ' Check if the control is a label and was dynamically added
+        If TypeName(ctrl) = "Label" And ctrl.Tag = "ListSugg" Then
+            Me.Controls.Remove ctrl.Name
+        End If
+    Next i
+End Sub
+
 Private Sub LinkToCell_Click()
     Dim selectedAddress As String
     Dim index As Integer
@@ -56,24 +83,29 @@ Private Sub LinkToCell_Click()
     index = LinkToCell.ListIndex
 
     Dim item As Variant
+    Dim eraseLabels As Boolean
     Dim acc As Integer
     Dim acc2 As Integer
     acc = 0
     For Each item In ThisWorkbook.listBoxList
-        acc2 = acc + Ubound(item(0))
-        acc = acc2 + Ubound(item(1))
-        If acc2 < index and index < acc Then
+        acc2 = acc
+        acc = acc + UBound(item)
+        If index < acc Then
             Dim subItem As Variant
-            For Each subItem In item(1)(index - acc2)
-                Select Case subItem.Keys
-                Case "select"
-                    subItem.Value.Select
-                Case "newVal"
-                    subItem.Value(0).Value = subItem.Value(1)
-                Case "newBgCol"
-                    subItem.Value(0).Interior.Color = subItem.Value(1)
-                End Select
-            Exit For
+            For Each subItem In item(index - acc2)(1)
+                With ThisWorkbook.Actions
+                    Select Case subItem(0)
+                    Case .Select
+                        subItem(1).Select
+                    Case .NewVal
+                        subItem(1).Value = subItem(2)
+                        RemoveDynamicLabels
+                    Case .NewBgCol
+                        subItem(1).Interior.Color = subItem(2)
+                        RemoveDynamicLabels
+                    End Select
+                End With
+            Next subItem
         End If
     Next item
 End Sub
