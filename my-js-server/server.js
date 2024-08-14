@@ -59,7 +59,6 @@ const allColumnNames = {
 const msgType = {
   ERROR: 0,
   WARNING: 1,
-  SUGGESTION: 2,
   RELATIVES: 3
 };
 
@@ -1152,13 +1151,19 @@ function suggSet(i, j, sugg) {
 }
 
 function inconsist(i, j, message, suggs, action = Actions.NewVal) {
-  response.append({ "listBoxList": [msgType.ERROR, message, [[Actions.Select, [i, j]]]] });
+  if(!"listBoxList" in response[0]) {
+    response[0]["listBoxList"] = [];
+    for (const key in msgType) {
+      response[0]["listBoxList"].append([]);
+    }
+  }
+  response[0]["listBoxList"][msgType.ERROR].push([0, message, [[Actions.Select, [i, j]]]]);
   suggs.forEach(sugg => {
     let newVal = sugg;
     if (action == Actions.NewVal) {
       newVal = sugg.join("; ");
     }
-    response.append({ "listBoxList": [msgType.SUGGESTION, newVal, [[Actions.Select, 0], [action, 0, newVal]]] });
+    response[0]["listBoxList"][msgType.ERROR].push([1, msgType.SUGGESTION, newVal, [[Actions.Select, 0], [action, 0, newVal]]]);
   });
 }
 
@@ -1427,7 +1432,7 @@ function checkSquarBrackets(i) {
 }
 
 function executeJS(body) {
-  response = [];
+  response = [{}];
   const funcName = body.functionName;
   if (funcName === 'handleChange') {
     handleChange(body.changes);

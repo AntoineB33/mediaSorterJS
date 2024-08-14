@@ -2,6 +2,18 @@ Dim msgTypeColors(3) As Integer
 msgTypeColors(0) = RGB(255, 0, 0)
 msgTypeColors(1) = RGB(255, 137, 0)
 msgTypeColors(2) = RGB(0, 145, 255)
+Dim labelTopPos As Integer
+labelTopPos = 150
+Dim labelLeftPos As Integer
+labelLeftPos = 0
+Dim labelHeight As Integer
+labelHeight = 18
+Dim labelSpacing As Integer
+labelSpacing = 0
+Dim labelWidth As Integer
+labelWidth = 18
+Dim avgCharWidth As Integer
+avgCharWidth = 6 ' Adjust this value based on your font size and type
 
 Dim sheetList As Object
 Dim requests As Collection
@@ -68,30 +80,7 @@ Private Sub Workbook_Open()
     Workbook_SheetActivate activeSheet
 End Sub
 
-Function MoveColorMidwayToWhite(originalColor As Long) As Long
-    Dim r As Integer
-    Dim g As Integer
-    Dim b As Integer
-    Dim newR As Integer
-    Dim newG As Integer
-    Dim newB As Integer
-    
-    ' Extract the red, green, and blue components from the original color
-    r = originalColor Mod 256
-    g = (originalColor \ 256) Mod 256
-    b = (originalColor \ 65536) Mod 256
-    
-    ' Calculate the midway color components
-    newR = (r + 255) \ 2
-    newG = (g + 255) \ 2
-    newB = (b + 255) \ 2
-    
-    ' Return the new color as a VBA RGB color value
-    MoveColorMidwayToWhite = RGB(newR, newG, newB)
-End Function
-
 Public Sub CheckHttpResponse()
-    Dim i As Long
     Dim http As Object
     Dim jsonResponse As String
     Dim jsonArray As Object
@@ -131,54 +120,106 @@ Public Sub CheckHttpResponse()
                             Set range = sheet.range(sheet.Cells(CInt(VBARequestParts(1)) + 1, 1), sheet.Cells(CInt(VBARequestParts(1)) + 1, 1))
                             range.Select
                         Case "listBoxList"
-                            If item(key)(0) <> msgType.SUGGESTION Then
-                                Dim r As Integer
-                                Dim g As Integer
-                                Dim b As Integer
-                                Dim newR As Integer
-                                Dim newG As Integer
-                                Dim newB As Integer
-                                r = color Mod 256
-                                g = (color \ 256) Mod 256
-                                b = (color \ 65536) Mod 256
-                                newR = (r + 255) \ 2
-                                newG = (g + 255) \ 2
-                                newB = (b + 255) \ 2
-                                color = RGB(newR, newG, newB)
-                            Else
-                                currentMsgType = item(key)(0)
-                                color = msgTypeColors(currentMsgType)
-                            End If
-                            
-                            ' Create a new label
-                            Set newLabel = UserForm1.Controls.Add("Forms.Label.1")
-                            With newLabel
-                                .Caption = item(key)(1)
-                                .Top = 10 + (i * 20)
-                                .Left = 10
-                                .Width = 100
-                                .Height = 15
-                                
-                                ' Assign a unique name or tag
-                                .Name = "ListSugg" & currentMsgType & "-" & UBound(listBoxList(sheetCodeName)(currentMsgType))
-                                .Tag = "ListSugg"
-                                
-                                ' Set colors for each item
-                                .BackColor = color
-                            End With
+                            For Each subItem In item(key)
+                                If item(key)(0) <> msgType.SUGGESTION Then
+                                    Dim r As Integer
+                                    Dim g As Integer
+                                    Dim b As Integer
+                                    Dim newR As Integer
+                                    Dim newG As Integer
+                                    Dim newB As Integer
+                                    r = color Mod 256
+                                    g = (color \ 256) Mod 256
+                                    b = (color \ 65536) Mod 256
+                                    newR = (r + 255) \ 2
+                                    newG = (g + 255) \ 2
+                                    newB = (b + 255) \ 2
+                                    color = RGB(newR, newG, newB)
+                                Else
+                                    currentMsgType = item(key)(0)
+                                    color = msgTypeColors(currentMsgType)
+                                End If
 
-                            
-                            listBoxList[
-                            Erase listBoxList
-                            chgBckCol = item(key)(4)
-                            UserForm1.LinkToCell.Clear
-                            UserForm1.LinkToCell.AddItem "------------"
-                            UserForm1.LinkToCell.AddItem item(key)(2)
-                            UserForm1.LinkToCell.AddItem "------------"
-                            For Each suggestionText In item(key)(3)
-                                UserForm1.LinkToCell.AddItem suggestionText
-                            Next suggestionText
-                            Set cellWithError = sheet.Cells(item(key)(1), item(key)(0))
+                                Dim acc As Integer
+                                acc = 0
+                                Dim i As Integer
+                                For i = 0 To currentMsgType - 1 Then
+                                    acc = acc + UBound(suggItem)
+                                Next suggItem
+                                
+                                ' Create a new label
+                                Set newLabel = UserForm1.Controls.Add("Forms.Label.1")
+                                With newLabel
+                                    .Caption = item(key)(1)
+                                    .Left = labelLeftPos
+                                    .Width = labelWidth
+                                    .WordWrap = True ' Enable word wrap
+
+                                    ' Calculate the number of lines in the label
+                                    Dim labelLines As Integer
+                                    Dim textLength As Integer
+                                    Dim lineWidth As Integer
+                                    
+                                    ' Estimate the average character width (this may need adjustment based on font)
+                                    lineWidth = labelWidth / avgCharWidth
+
+                                    ' Calculate the number of lines in the label
+                                    Dim pos As Integer
+                                    Dim pos0 As Integer
+                                    pos0 = 1
+                                    pos = InStr(1, item(key)(1), vbLf)
+                                    If pos = 0 Then
+                                        pos = Len(item(key)(1)) + 1
+                                    End If
+                                    labelLines = 0
+                                    Do While pos > 0
+                                        ' Calculate the number of lines based on text length and line width
+                                        labelLines = labelLines + Int((pos - pos0) / lineWidth) + 1
+
+                                        pos = InStr(pos + 1, item(key)(1), vbLf)
+                                    Loop
+                                    
+                                    ' Adjust the height based on the number of lines
+                                    .Height = labelHeight * labelLines
+                                    
+                                    ' Assign a unique name or tag
+                                    .Name = "ListSugg" & currentMsgType & "-" & UBound(listBoxList(sheetCodeName)(currentMsgType))
+                                    .Tag = "ListSugg" & currentMsgType
+                                    
+                                    ' Set colors for each item
+                                    .BackColor = color
+                                End With
+                                
+                                For i = UserForm1.Controls.Count - 1 To 0 Step -1
+                                    Set ctrl = UserForm1.Controls(i)
+                                    If TypeName(ctrl) = "Label" And ctrl.Tag = "Dynamic" Then
+                                        Dim x As Integer
+                                        Dim xStr As String
+                                        Dim hyphenPos As Integer
+                                        ' Check if the name starts with the prefix
+                                        If Left(ctrl.Name, Len("ListSugg")) = "ListSugg" Then
+                                            ' Extract the part after the prefix
+                                            Dim suffix As String
+                                            suffix = Mid(ctrl.Name, Len("ListSugg") + 1)
+                                            ' Find the position of the hyphen
+                                            hyphenPos = InStr(suffix, "-")
+                                            ' Check if hyphen exists
+                                            If hyphenPos > 0 Then
+                                                ' Extract the numeric part (x) and the remaining part (y)
+                                                xStr = Left(suffix, hyphenPos - 1)
+                                                ' Check if the numeric part is actually a number
+                                                If IsNumeric(xStr) Then
+                                                    x = CInt(xStr)
+                                                    ' Compare the numeric part with currentMsgType
+                                                    If x > currentMsgType Then
+                                                        ctrl.Top = ctrl.Top + labelHeight + labelSpacing
+                                                    End If
+                                                End If
+                                            End If
+                                        End If
+                                    End If
+                                Next i
+                            Next subItem
                         Case "sort"
                             Dim fullName As String
                             fullName = ThisWorkbook.Name
