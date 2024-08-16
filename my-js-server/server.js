@@ -1,15 +1,13 @@
 const express = require('express');
 const { exec } = require('child_process');
-
 const app = express();
 const port = 3000;
-
-
 // Middleware to parse JSON bodies
 app.use(express.json());
 
-
+var msgTypeColors = [{ r: 255, g: 0, b: 0 }, { r: 255, g: 137, b: 0 }, { r: 0, g: 145, b: 255 }];
 var updateRegularity = 1;
+
 var values0 = {};
 var values = [];
 var oldValues = [];
@@ -1150,20 +1148,31 @@ function suggSet(i, j, sugg) {
   inconsist(i, j, "Error at " + cellAddress, sugg);
 }
 
-function inconsist(i, j, message, suggs, action = Actions.NewVal) {
+function midToWhite(theMsgType = msgType.ERROR) {
+  let r = msgTypeColors[theMsgType].r % 256;
+  let g = Math.floor(msgTypeColors[theMsgType].g / 256) % 256;
+  let b = Math.floor(msgTypeColors[theMsgType].b / 65536) % 256;
+  let newR = Math.floor((r + 255) / 2);
+  let newG = Math.floor((g + 255) / 2);
+  let newB = Math.floor((b + 255) / 2);
+  return RGB(newR, newG, newB);
+}
+
+function inconsist(i, j, message, suggs, theAction = Actions.NewVal) {
   if(!"listBoxList" in response[0]) {
     response[0]["listBoxList"] = [];
     for (const key in msgType) {
       response[0]["listBoxList"].append([]);
     }
   }
-  response[0]["listBoxList"][msgType.ERROR].push([0, message, [[Actions.Select, [i, j]]]]);
+  response[0]["listBoxList"][msgType.ERROR].push({color: msgTypeColors[msgType.ERROR], msg: message, actions: [{action: Actions.Select, address: [i, j]}]});
+
   suggs.forEach(sugg => {
-    let newVal = sugg;
-    if (action == Actions.NewVal) {
-      newVal = sugg.join("; ");
+    let theNewVal = sugg;
+    if (theAction == Actions.NewVal) {
+      theNewVal = sugg.join("; ");
     }
-    response[0]["listBoxList"][msgType.ERROR].push([1, msgType.SUGGESTION, newVal, [[Actions.Select, 0], [action, 0, newVal]]]);
+    response[0]["listBoxList"][msgType.ERROR].push({color: midToWhite(), msg: newVal, actions: [{action: Actions.Select, address: 0}, {action: theAction, address: 0, newVal: theNewVal}]});
   });
 }
 
@@ -1435,7 +1444,8 @@ function executeJS(body) {
   response = [{}];
   const funcName = body.functionName;
   if (funcName === 'handleChange') {
-    handleChange(body.changes);
+    inconsist(0, 0, "hello", "yo");
+    //handleChange(body.changes);
   } else if (funcName === 'selectionChange') {
     selectedCells[sheetCodeName] = body.selection;
     handleSelectLinks();

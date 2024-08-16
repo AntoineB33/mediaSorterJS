@@ -1,19 +1,9 @@
-Dim msgTypeColors(3) As Integer
-msgTypeColors(0) = RGB(255, 0, 0)
-msgTypeColors(1) = RGB(255, 137, 0)
-msgTypeColors(2) = RGB(0, 145, 255)
 Dim labelTopPos As Integer
-labelTopPos = 150
 Dim labelLeftPos As Integer
-labelLeftPos = 0
 Dim labelHeight As Integer
-labelHeight = 18
 Dim labelSpacing As Integer
-labelSpacing = 0
 Dim labelWidth As Integer
-labelWidth = 18
 Dim avgCharWidth As Integer
-avgCharWidth = 6 ' Adjust this value based on your font size and type
 
 Dim sheetList As Object
 Dim requests As Collection
@@ -24,25 +14,24 @@ Dim sheet As Worksheet
 Dim sorting As Object
 Dim sheetCodeName As String
 Dim targetAddress As Object
-
-Public listBoxList As Object
+Dim listBoxList As Object
 
 
 Enum Actions
-    Select = 1
-    NewVal = 2
-    NewBgCol = 3
-End Enum
-
-Enum msgType
-    ERROR = 0
-    WARNING = 1
-    SUGGESTION = 2
-    RELATIVES = 3
+    SelectAction = 1
+    NewValAction = 2
+    NewBgColAction = 3
 End Enum
 
 
 Private Sub Workbook_Open()
+    labelTopPos = 150
+    labelLeftPos = 0
+    labelHeight = 18
+    labelSpacing = 0
+    labelWidth = 18
+    avgCharWidth = 6 ' Adjust this value based on your font size and type
+
     Call Shell("cmd.exe /C C:\Users\abarb\Documents\health\news_underground\mediaSorter\programs\excel_prog\mediaSorter\my-js-server\startNodeJS.bat", vbHide)
     timerStarted = False
     lastIsChg = False
@@ -70,7 +59,7 @@ Private Sub Workbook_Open()
     UserForm1.ctrlZButton.Caption = "ctrlZ"
     UserForm1.ctrlYButton.Caption = "ctrlY"
     UserForm1.PowerPointButton.Caption = "PowerPoint"
-    UserForm1.renamings.Caption = ""
+    UserForm1.Renamings.Caption = ""
     UserForm1.Show vbModeless ' Show the UserForm without blocking Excel
 
     Set sheetList = CreateObject("Scripting.Dictionary")
@@ -78,6 +67,22 @@ Private Sub Workbook_Open()
     Set targetAddress = CreateObject("Scripting.Dictionary")
     Set listBoxList = CreateObject("Scripting.Dictionary")
     Workbook_SheetActivate activeSheet
+End Sub
+
+Sub LabelClickHandler(labelIndex As Integer)
+    If listBoxList(sheetCodeName)(labelIndex)("sheetCodeName") <> sheetCodeName Then
+        Exit Sub
+    End If
+    For Each Action In listBoxList(sheetCodeName)(labelIndex)
+        Select Case Action("action")
+        Case Actions.SelectAction
+            Action("address").Select
+        Case Actions.NewValAction
+            Action("address").Value = Action("newVal")
+        Case Actions.NewBgColAction
+            Action("address").Interior.color = Action("newVal")
+        End Select
+    Next Action
 End Sub
 
 Public Sub CheckHttpResponse()
@@ -111,114 +116,98 @@ Public Sub CheckHttpResponse()
                         Case "range_updateRegularity"
                             Set range = sheet.range(sheet.Cells(VBARequestParts(1), 1), sheet.Cells(VBARequestParts(1), VBARequestParts(2)))
                         Case "color_updateRegularity"
-                            range.Interior.Color = VBARequestParts(1)
+                            range.Interior.color = VBARequestParts(1)
                         Case "clear_updateRegularity"
-                            range.Interior.Color = xlNone
+                            range.Interior.color = xlNone
                         Case "font_updateRegularity"
-                            range.Font.Color = VBARequestParts(1)
+                            range.Font.color = VBARequestParts(1)
                         Case "select"
                             Set range = sheet.range(sheet.Cells(CInt(VBARequestParts(1)) + 1, 1), sheet.Cells(CInt(VBARequestParts(1)) + 1, 1))
                             range.Select
                         Case "listBoxList"
-                            For Each subItem In item(key)
-                                If item(key)(0) <> msgType.SUGGESTION Then
-                                    Dim r As Integer
-                                    Dim g As Integer
-                                    Dim b As Integer
-                                    Dim newR As Integer
-                                    Dim newG As Integer
-                                    Dim newB As Integer
-                                    r = color Mod 256
-                                    g = (color \ 256) Mod 256
-                                    b = (color \ 65536) Mod 256
-                                    newR = (r + 255) \ 2
-                                    newG = (g + 255) \ 2
-                                    newB = (b + 255) \ 2
-                                    color = RGB(newR, newG, newB)
-                                Else
-                                    currentMsgType = item(key)(0)
-                                    color = msgTypeColors(currentMsgType)
+                            Dim newLabel As MSForms.Label
+                            Dim i As Integer
+                            
+                            ' Loop through all controls in the UserForm
+                            For i = UserForm1.Controls.Count - 1 To 0 Step -1
+                                Set newLabel = UserForm1.Controls(i)
+                                
+                                ' Check if the control is a label and was dynamically added
+                                If TypeName(newLabel) = "Label" And newLabel.Tag = "ListSugg" Then
+                                    UserForm1.Controls.Remove newLabel.Name
                                 End If
+                            Next i
+                            
+                            Dim acc As Integer
+                            acc = 0
+                            Erase listBoxList(sheetCodeName)
+                            Dim subItem As Variant
+                            For Each subItem In item(key)
+                                Dim callAddress As Variant
+                                Dim oneListItem As Variant
+                                For Each oneListItem In subItem
+                                    ' Create a new label
+                                    Set newLabel = UserForm1.Controls.Add("Forms.Label.1")
+                                    With newLabel
+                                        .Caption = oneListItem("msg")
+                                        .Left = labelLeftPos
+                                        .Width = labelWidth
+                                        .WordWrap = True ' Enable word wrap
 
-                                Dim acc As Integer
-                                acc = 0
-                                Dim i As Integer
-                                For i = 0 To currentMsgType - 1 Then
-                                    acc = acc + UBound(suggItem)
-                                Next suggItem
-                                
-                                ' Create a new label
-                                Set newLabel = UserForm1.Controls.Add("Forms.Label.1")
-                                With newLabel
-                                    .Caption = item(key)(1)
-                                    .Left = labelLeftPos
-                                    .Width = labelWidth
-                                    .WordWrap = True ' Enable word wrap
+                                        ' Calculate the number of lines in the label
+                                        Dim labelLines As Integer
+                                        Dim textLength As Integer
+                                        Dim lineWidth As Integer
+                                        
+                                        ' Estimate the average character width (this may need adjustment based on font)
+                                        lineWidth = labelWidth / avgCharWidth
 
-                                    ' Calculate the number of lines in the label
-                                    Dim labelLines As Integer
-                                    Dim textLength As Integer
-                                    Dim lineWidth As Integer
-                                    
-                                    ' Estimate the average character width (this may need adjustment based on font)
-                                    lineWidth = labelWidth / avgCharWidth
-
-                                    ' Calculate the number of lines in the label
-                                    Dim pos As Integer
-                                    Dim pos0 As Integer
-                                    pos0 = 1
-                                    pos = InStr(1, item(key)(1), vbLf)
-                                    If pos = 0 Then
-                                        pos = Len(item(key)(1)) + 1
-                                    End If
-                                    labelLines = 0
-                                    Do While pos > 0
-                                        ' Calculate the number of lines based on text length and line width
-                                        labelLines = labelLines + Int((pos - pos0) / lineWidth) + 1
-
-                                        pos = InStr(pos + 1, item(key)(1), vbLf)
-                                    Loop
-                                    
-                                    ' Adjust the height based on the number of lines
-                                    .Height = labelHeight * labelLines
-                                    
-                                    ' Assign a unique name or tag
-                                    .Name = "ListSugg" & currentMsgType & "-" & UBound(listBoxList(sheetCodeName)(currentMsgType))
-                                    .Tag = "ListSugg" & currentMsgType
-                                    
-                                    ' Set colors for each item
-                                    .BackColor = color
-                                End With
-                                
-                                For i = UserForm1.Controls.Count - 1 To 0 Step -1
-                                    Set ctrl = UserForm1.Controls(i)
-                                    If TypeName(ctrl) = "Label" And ctrl.Tag = "Dynamic" Then
-                                        Dim x As Integer
-                                        Dim xStr As String
-                                        Dim hyphenPos As Integer
-                                        ' Check if the name starts with the prefix
-                                        If Left(ctrl.Name, Len("ListSugg")) = "ListSugg" Then
-                                            ' Extract the part after the prefix
-                                            Dim suffix As String
-                                            suffix = Mid(ctrl.Name, Len("ListSugg") + 1)
-                                            ' Find the position of the hyphen
-                                            hyphenPos = InStr(suffix, "-")
-                                            ' Check if hyphen exists
-                                            If hyphenPos > 0 Then
-                                                ' Extract the numeric part (x) and the remaining part (y)
-                                                xStr = Left(suffix, hyphenPos - 1)
-                                                ' Check if the numeric part is actually a number
-                                                If IsNumeric(xStr) Then
-                                                    x = CInt(xStr)
-                                                    ' Compare the numeric part with currentMsgType
-                                                    If x > currentMsgType Then
-                                                        ctrl.Top = ctrl.Top + labelHeight + labelSpacing
-                                                    End If
-                                                End If
-                                            End If
+                                        ' Calculate the number of lines in the label
+                                        Dim pos As Integer
+                                        Dim pos0 As Integer
+                                        pos0 = 1
+                                        pos = InStr(1, item(key)(1), vbLf)
+                                        If pos = 0 Then
+                                            pos = Len(item(key)(1)) + 1
                                         End If
-                                    End If
-                                Next i
+                                        labelLines = 0
+                                        Do While pos > 0
+                                            ' Calculate the number of lines based on text length and line width
+                                            labelLines = labelLines + Int((pos - pos0) / lineWidth) + 1
+
+                                            pos = InStr(pos + 1, item(key)(1), vbLf)
+                                        Loop
+                                        
+                                        ' Adjust the height based on the number of lines
+                                        .Height = labelHeight * labelLines
+                                        
+                                        ' Assign a unique name or tag
+                                        .Name = "ListSugg" & acc
+                                        .Tag = "ListSugg"
+                                        
+                                        ' Set colors for each item
+                                        .BackColor = oneListItem("color")
+
+                                        oneListItem("actions").Add "sheetCodeName", sheetCodeName
+
+                                        ' Assign the address to the action
+                                        For Each Action In oneListItem("actions")
+                                            If Action("address") = 0 Then
+                                                Action("address") = callAddress
+                                            Else
+                                                callAddress = sheet.Cells(Action("address")(0), Action("address")(1))
+                                                Action("address") = callAddress
+                                            End If
+                                        Next Action
+
+                                        listBoxList(sheetCodeName).Add oneListItem("actions")
+
+                                        acc = acc + 1
+
+                                        ' Assign the macro to the label's Click event
+                                        .Object.OnAction = "'LabelClickHandler " & i & "'"
+                                    End With
+                                Next oneListItem
                             Next subItem
                         Case "sort"
                             Dim fullName As String
@@ -264,7 +253,7 @@ Public Sub CheckHttpResponse()
                             UserForm1.RelativesList.AddItem VBARequestParts(1)
                             arr(UBound(arr)) = VBARequestParts(2)
                         Case "Renamings"
-                            With UserForm1.renamings
+                            With UserForm1.Renamings
                                 .Caption = VBARequestParts(1)
                                 .Visible = True
                             End With
@@ -296,6 +285,7 @@ Private Sub Worksheet_SelectionChange(ByVal Target As range)
 End Sub
 
 Private Sub Workbook_SheetActivate(ByVal Sh As Object)
+    Set sheetVBA = Sh
     sheetCodeName = Sh.codeName
     If Not sheetList.Exists(sheetCodeName) Then
         ' Get the used range
@@ -307,10 +297,11 @@ Private Sub Workbook_SheetActivate(ByVal Sh As Object)
         ' get the color of each header
         Dim headerColors As Variant
         Dim newColCount As Long
+        newColCount = UBound(myArray, 2)
         Dim j As Long
         ReDim headerColors(1 To newColCount)
         For j = 1 To newColCount
-            headerColors(j) = sheet.Cells(1, j).Interior.Color
+            headerColors(j) = sheetVBA.Cells(1, j).Interior.color
         Next j
 
         CallJavaScriptFunctionAsync "newSheet", False, "values", myArray
@@ -323,17 +314,16 @@ Private Sub Workbook_SheetActivate(ByVal Sh As Object)
         relativesListCells.Add sheetCodeName, emptyList
         targetAddress.Add sheetCodeName, Application.Selection.Address
         Dim newCollection As Collection
-        Collection = New Collection
-        listBoxList.Add sheetCodeName, Collection
+        Set newCollection = New Collection
+        listBoxList.Add sheetCodeName, newCollection
     End If
     CallJavaScriptFunctionAsync "chgSheet", False, "sheetCodeName", sheetCodeName
     CallJavaScriptFunctionAsync "selectionChange", True, "selection", targetAddress(sheetCodeName), "headerColors", headerColors
-    Set sheetVBA = Sh
 End Sub
 
-Private Sub Workbook_SheetChange(ByVal Sh As Object, ByVal Target As Range)
+Private Sub Workbook_SheetChange(ByVal Sh As Object, ByVal Target As range)
     Dim changes() As Variant
-    Dim cell As Range
+    Dim cell As range
     Dim i As Long
 
     ' Initialize the dynamic array with the size of the Target range
@@ -358,13 +348,13 @@ Sub styleBorders(i As Integer, jL As Integer, jU As Integer, draw As Boolean)
         Set cell = sheet.Cells(i + 1, j + 1)
         If draw Then
             cell.Borders(xlEdgeTop).LineStyle = xlContinuous
-            cell.Borders(xlEdgeTop).Color = RGB(0, 0, 0)
+            cell.Borders(xlEdgeTop).color = RGB(0, 0, 0)
             cell.Borders(xlEdgeBottom).LineStyle = xlContinuous
-            cell.Borders(xlEdgeBottom).Color = RGB(0, 0, 0)
+            cell.Borders(xlEdgeBottom).color = RGB(0, 0, 0)
             cell.Borders(xlEdgeLeft).LineStyle = xlContinuous
-            cell.Borders(xlEdgeLeft).Color = RGB(0, 0, 0)
+            cell.Borders(xlEdgeLeft).color = RGB(0, 0, 0)
             cell.Borders(xlEdgeRight).LineStyle = xlContinuous
-            cell.Borders(xlEdgeRight).Color = RGB(0, 0, 0)
+            cell.Borders(xlEdgeRight).color = RGB(0, 0, 0)
         Else
             cell.Borders(xlEdgeTop).LineStyle = xlNone
             cell.Borders(xlEdgeBottom).LineStyle = xlNone
@@ -450,6 +440,10 @@ End Sub
 Private Sub sendHTTP()
 
 End Sub
+
+
+
+
 
 
 
