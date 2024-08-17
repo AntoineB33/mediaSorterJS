@@ -15,6 +15,7 @@ Dim sorting As Object
 Dim sheetCodeName As String
 Dim targetAddress As Object
 Dim listBoxList As Object
+Dim newCollection As Collection
 
 
 Enum Actions
@@ -23,51 +24,6 @@ Enum Actions
     NewBgColAction = 3
 End Enum
 
-
-Private Sub Workbook_Open()
-    labelTopPos = 150
-    labelLeftPos = 0
-    labelHeight = 18
-    labelSpacing = 0
-    labelWidth = 18
-    avgCharWidth = 6 ' Adjust this value based on your font size and type
-
-    Call Shell("cmd.exe /C C:\Users\abarb\Documents\health\news_underground\mediaSorter\programs\excel_prog\mediaSorter\my-js-server\startNodeJS.bat", vbHide)
-    timerStarted = False
-    lastIsChg = False
-    Set requests = New Collection
-
-
-    
-    Dim ref As Object
-    On Error Resume Next
-    ' Check if the reference is already added
-    Set ref = ThisWorkbook.VBProject.References("Scripting")
-    On Error GoTo 0
-    
-    ' If the reference is not added, add it
-    If ref Is Nothing Then
-        ThisWorkbook.VBProject.References.AddFromGuid _
-            GUID:="{420B2830-E718-11CF-893D-00A0C9054228}", Major:=1, Minor:=0
-    End If
-
-
-
-
-    UserForm1.SortButton.Caption = "Sort"
-    UserForm1.updateButton.Caption = "update"
-    UserForm1.ctrlZButton.Caption = "ctrlZ"
-    UserForm1.ctrlYButton.Caption = "ctrlY"
-    UserForm1.PowerPointButton.Caption = "PowerPoint"
-    UserForm1.Renamings.Caption = ""
-    UserForm1.Show vbModeless ' Show the UserForm without blocking Excel
-
-    Set sheetList = CreateObject("Scripting.Dictionary")
-    Set sorting = CreateObject("Scripting.Dictionary")
-    Set targetAddress = CreateObject("Scripting.Dictionary")
-    Set listBoxList = CreateObject("Scripting.Dictionary")
-    Workbook_SheetActivate activeSheet
-End Sub
 
 Sub LabelClickHandler(labelIndex As Integer)
     If listBoxList(sheetCodeName)(labelIndex)("sheetCodeName") <> sheetCodeName Then
@@ -81,6 +37,7 @@ Sub LabelClickHandler(labelIndex As Integer)
             Action("address").Value = Action("newVal")
         Case Actions.NewBgColAction
             Action("address").Interior.color = Action("newVal")
+            CallJavaScriptFunctionAsync "chgSheet", False, "sheetCodeName", sheetCodeName
         End Select
     Next Action
 End Sub
@@ -96,7 +53,7 @@ Public Sub CheckHttpResponse()
     Dim arr() As Variant
     Dim currentMsgType As Integer
     Dim color As Long
-
+    Dim j As Integer
     For j = requests.Count To 1 Step -1
         Set http = requests(j).http
         If http.readyState = 4 Then
@@ -108,47 +65,48 @@ Public Sub CheckHttpResponse()
                 For Each item In jsonArray
                     For Each key In item.Keys
                         Select Case key
-                        Case "styleBorders"
-                            styleBorders CInt(VBARequestParts(1)), CInt(VBARequestParts(2)), CInt(VBARequestParts(3)), CBool(VBARequestParts(5))
-                        Case "chgValue"
-                            Set cell = sheet.Cells(CInt(VBARequestParts(2)), CInt(VBARequestParts(1)))
-                            cell.Value = VBARequestParts(3)
-                        Case "range_updateRegularity"
-                            Set range = sheet.range(sheet.Cells(VBARequestParts(1), 1), sheet.Cells(VBARequestParts(1), VBARequestParts(2)))
-                        Case "color_updateRegularity"
-                            range.Interior.color = VBARequestParts(1)
-                        Case "clear_updateRegularity"
-                            range.Interior.color = xlNone
-                        Case "font_updateRegularity"
-                            range.Font.color = VBARequestParts(1)
-                        Case "select"
-                            Set range = sheet.range(sheet.Cells(CInt(VBARequestParts(1)) + 1, 1), sheet.Cells(CInt(VBARequestParts(1)) + 1, 1))
-                            range.Select
+                        ' Case "styleBorders"
+                        '     styleBorders CInt(VBARequestParts(1)), CInt(VBARequestParts(2)), CInt(VBARequestParts(3)), CBool(VBARequestParts(5))
+                        ' Case "chgValue"
+                        '     Set cell = sheet.Cells(CInt(VBARequestParts(2)), CInt(VBARequestParts(1)))
+                        '     cell.Value = VBARequestParts(3)
+                        ' Case "range_updateRegularity"
+                        '     Set range = sheet.range(sheet.Cells(VBARequestParts(1), 1), sheet.Cells(VBARequestParts(1), VBARequestParts(2)))
+                        ' Case "color_updateRegularity"
+                        '     range.Interior.color = VBARequestParts(1)
+                        ' Case "clear_updateRegularity"
+                        '     range.Interior.color = xlNone
+                        ' Case "font_updateRegularity"
+                        '     range.Font.color = VBARequestParts(1)
+                        ' Case "select"
+                        '     Set range = sheet.range(sheet.Cells(CInt(VBARequestParts(1)) + 1, 1), sheet.Cells(CInt(VBARequestParts(1)) + 1, 1))
+                        '     range.Select
                         Case "listBoxList"
-                            Dim newLabel As MSForms.Label
+                            Dim ctrl As Control
                             Dim i As Integer
                             
                             ' Loop through all controls in the UserForm
                             For i = UserForm1.Controls.Count - 1 To 0 Step -1
-                                Set newLabel = UserForm1.Controls(i)
+                                Set ctrl = UserForm1.Controls(i)
                                 
                                 ' Check if the control is a label and was dynamically added
-                                If TypeName(newLabel) = "Label" And newLabel.Tag = "ListSugg" Then
-                                    UserForm1.Controls.Remove newLabel.Name
+                                If TypeName(ctrl) = "Label" And ctrl.Tag = "ListSugg" Then
+                                    UserForm1.Controls.Remove ctrl.Name
                                 End If
                             Next i
                             
                             Dim acc As Integer
                             acc = 0
-                            Erase listBoxList(sheetCodeName)
+                            ' Set newCollection = New Collection
+                            Set listBoxList(sheetCodeName) = New Collection
                             Dim subItem As Variant
                             For Each subItem In item(key)
                                 Dim callAddress As Variant
                                 Dim oneListItem As Variant
                                 For Each oneListItem In subItem
                                     ' Create a new label
-                                    Set newLabel = UserForm1.Controls.Add("Forms.Label.1")
-                                    With newLabel
+                                    Set ctrl = UserForm1.Controls.Add("Forms.Label.1")
+                                    With ctrl
                                         .Caption = oneListItem("msg")
                                         .Left = labelLeftPos
                                         .Width = labelWidth
@@ -209,58 +167,48 @@ Public Sub CheckHttpResponse()
                                     End With
                                 Next oneListItem
                             Next subItem
-                        Case "sort"
-                            Dim fullName As String
-                            fullName = ThisWorkbook.Name
-                            Dim suffix As String
-                            suffix = Left(fullName, InStrRev(fullName, ".") - 1) & "\" & sheet.Name
-                            Dim filePath As String
-                            filePath = dataFolderPath & suffix & ".txt"
-                            Dim fileNumber As Integer
+                        ' Case "sort"
+                        '     Dim fullName As String
+                        '     fullName = ThisWorkbook.Name
+                        '     Dim suffix As String
+                        '     suffix = Left(fullName, InStrRev(fullName, ".") - 1) & "\" & sheet.Name
+                        '     Dim filePath As String
+                        '     filePath = dataFolderPath & suffix & ".txt"
+                        '     Dim fileNumber As Integer
 
                             
-                            ' Check if the directory exists, if not, create it
-                            If Dir(dataFolderName, vbDirectory) = "" Then
-                                MkDir dataFolderName
-                            End If
+                        '     ' Check if the directory exists, if not, create it
+                        '     If Dir(dataFolderName, vbDirectory) = "" Then
+                        '         MkDir dataFolderName
+                        '     End If
 
-                            ' Open the file for writing
-                            fileNumber = FreeFile
-                            Open filePath For Output As fileNumber
+                        '     ' Open the file for writing
+                        '     fileNumber = FreeFile
+                        '     Open filePath For Output As fileNumber
 
-                            Dim linesToWriteInFile() As String
-                            linesToWriteInFile = Split(VBARequestParts(1), vbLf)
-                            For Each Line In linesToWriteInFile
-                                Print #fileNumber, Line
-                            Next Line
+                        '     Dim linesToWriteInFile() As String
+                        '     linesToWriteInFile = Split(VBARequestParts(1), vbLf)
+                        '     For Each Line In linesToWriteInFile
+                        '         Print #fileNumber, Line
+                        '     Next Line
 
-                            ' Close the file
-                            Close fileNumber
+                        '     ' Close the file
+                        '     Close fileNumber
                             
-                            Dim cFilePath As String
-                            cFilePath = Root & "programs\c_prog\Project2\x64\Debug\Project2.exe " & suffix
-                            'ExecuteCFile cFilePath
-                        Case "sorting"
-                            sorting(sheetCodeName) = Not sorting(sheetCodeName)
-                        Case "clearRelativesList"
-                            UserForm1.RelativesList.Clear
-                        Case "addItem"
-                            ' Initialize the RelativesListAddresses array to the size of the data range
-                            arr = relativesListCells(sheetCodeName)
-                            ReDim arr(1 To UBound(RelativesListAddresses(sheetCodeName)))
-                            arr = RelativesListAddresses(sheetCodeName)
-                            ReDim arr(1 To UBound(RelativesListAddresses(sheetCodeName)) + 1)
-                            UserForm1.RelativesList.AddItem VBARequestParts(1)
-                            arr(UBound(arr)) = VBARequestParts(2)
-                        Case "Renamings"
-                            With UserForm1.Renamings
-                                .Caption = VBARequestParts(1)
-                                .Visible = True
-                            End With
-                        Case "oldNameInput"
-                            UserForm1.oldNameInput.Text = VBARequestParts(1)
-                        Case "newNameInput"
-                            UserForm1.newNameInput.Text = VBARequestParts(1)
+                        '     Dim cFilePath As String
+                        '     cFilePath = Root & "programs\c_prog\Project2\x64\Debug\Project2.exe " & suffix
+                        '     'ExecuteCFile cFilePath
+                        ' Case "sorting"
+                        '     sorting(sheetCodeName) = Not sorting(sheetCodeName)
+                        ' Case "Renamings"
+                        '     With UserForm1.Renamings
+                        '         .Caption = VBARequestParts(1)
+                        '         .Visible = True
+                        '     End With
+                        ' Case "oldNameInput"
+                        '     UserForm1.oldNameInput.Text = VBARequestParts(1)
+                        ' Case "newNameInput"
+                        '     UserForm1.newNameInput.Text = VBARequestParts(1)
                         End Select
                     Next key
                 Next item
@@ -284,41 +232,49 @@ Private Sub Worksheet_SelectionChange(ByVal Target As range)
     CallJavaScriptFunctionAsync "selectionChange", True, "selectedCells", Target.Address
 End Sub
 
+' Define a custom type
+Type TwoLists
+    headerColors As Variant
+    myArray As Variant
+End Type
+
+Private Sub give_headerColors(Optional newColCount As Long) As TwoLists
+    If newColCount Is Nothing Then
+        ' Determine the last column by finding the last non-empty cell in the header row
+        newColCount = sheetVBA.Cells(headerRow, sheetVBA.Columns.Count).End(xlToLeft).Column
+    End If
+    ' get the color of each header
+    Dim headerColors(1 To newColCount) As Variant
+    Dim j As Long
+    For j = 1 To newColCount
+        headerColors(j) = sheetVBA.Cells(1, j).Interior.color
+    Next j
+    
+    Dim result As TwoLists
+    Set result.headerColors = headerColors
+    Set result.myArray = myArray
+    CallJavaScriptFunctionAsync "chgSheet", False, "sheetCodeName", sheetCodeName, "headerColors", headerColors
+End Sub
+
 Private Sub Workbook_SheetActivate(ByVal Sh As Object)
     Set sheetVBA = Sh
     sheetCodeName = Sh.codeName
     If Not sheetList.Exists(sheetCodeName) Then
-        ' Get the used range
-        Dim usedRange As range
-        Dim myArray As Variant
-        Set usedRange = Sh.usedRange
-        myArray = usedRange.Value
+        Dim result As TwoLists
+        Set result.headerColors = headerColors
+        Set result.myArray = myArray
+        give_headerColors = result
 
-        ' get the color of each header
-        Dim headerColors As Variant
-        Dim newColCount As Long
-        newColCount = UBound(myArray, 2)
-        Dim j As Long
-        ReDim headerColors(1 To newColCount)
-        For j = 1 To newColCount
-            headerColors(j) = sheetVBA.Cells(1, j).Interior.color
-        Next j
-
-        CallJavaScriptFunctionAsync "newSheet", False, "values", myArray
+        CallJavaScriptFunctionAsync "newSheet", False, "sheetCodeName", sheetCodeName, "values", result.myArray
         
         ' Add the data to the dictionary
         sheetList.Add sheetCodeName, Sh
         sorting.Add sheetCodeName, False
-        Dim emptyList() As Variant
-        RelativesListAddresses.Add sheetCodeName, emptyList
-        relativesListCells.Add sheetCodeName, emptyList
         targetAddress.Add sheetCodeName, Application.Selection.Address
-        Dim newCollection As Collection
         Set newCollection = New Collection
         listBoxList.Add sheetCodeName, newCollection
     End If
-    CallJavaScriptFunctionAsync "chgSheet", False, "sheetCodeName", sheetCodeName
-    CallJavaScriptFunctionAsync "selectionChange", True, "selection", targetAddress(sheetCodeName), "headerColors", headerColors
+    CallJavaScriptFunctionAsync "selectionChange", True, "selection", targetAddress(sheetCodeName)
 End Sub
 
 Private Sub Workbook_SheetChange(ByVal Sh As Object, ByVal Target As range)
@@ -441,17 +397,47 @@ Private Sub sendHTTP()
 
 End Sub
 
+Private Sub Workbook_Open()
+    labelTopPos = 150
+    labelLeftPos = 0
+    labelHeight = 18
+    labelSpacing = 0
+    labelWidth = 18
+    avgCharWidth = 6 ' Adjust this value based on your font size and type
+
+    Call Shell("cmd.exe /C C:\Users\abarb\Documents\health\news_underground\mediaSorter\programs\excel_prog\mediaSorter\my-js-server\startNodeJS.bat", vbHide)
+    timerStarted = False
+    lastIsChg = False
+    Set requests = New Collection
+
+
+    
+    Dim ref As Object
+    On Error Resume Next
+    ' Check if the reference is already added
+    Set ref = ThisWorkbook.VBProject.References("Scripting")
+    On Error GoTo 0
+    
+    ' If the reference is not added, add it
+    If ref Is Nothing Then
+        ThisWorkbook.VBProject.References.AddFromGuid _
+            GUID:="{420B2830-E718-11CF-893D-00A0C9054228}", Major:=1, Minor:=0
+    End If
 
 
 
 
+    UserForm1.SortButton.Caption = "Sort"
+    UserForm1.updateButton.Caption = "update"
+    UserForm1.ctrlZButton.Caption = "ctrlZ"
+    UserForm1.ctrlYButton.Caption = "ctrlY"
+    UserForm1.PowerPointButton.Caption = "PowerPoint"
+    UserForm1.Renamings.Caption = ""
+    UserForm1.Show vbModeless ' Show the UserForm without blocking Excel
 
-
-
-
-
-
-
-
-
-
+    Set sheetList = CreateObject("Scripting.Dictionary")
+    Set sorting = CreateObject("Scripting.Dictionary")
+    Set targetAddress = CreateObject("Scripting.Dictionary")
+    Set listBoxList = CreateObject("Scripting.Dictionary")
+    Workbook_SheetActivate activeSheet
+End Sub

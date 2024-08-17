@@ -47,16 +47,6 @@ Private Sub newNameInput_KeyDown(ByVal KeyCode As MSForms.ReturnInteger, ByVal S
     End If
 End Sub
 
-Sub LabelClicked()
-    Dim clickedLabel As MSForms.Label
-    
-    ' Identify which label was clicked
-    Set clickedLabel = Me.Controls(Application.Caller)
-    
-    ' Show message based on the clicked label
-    MsgBox "You clicked: " & clickedLabel.Caption, vbInformation
-End Sub
-
 Private Sub UserForm_Initialize()
     ' Set UserForm properties
     Me.BackColor = RGB(255, 255, 255) ' Set background color to white (same as Excel)

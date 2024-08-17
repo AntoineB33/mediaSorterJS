@@ -109,7 +109,7 @@ function handleSelectLinks() {
     if(perRef[row] > -1) {
       for(let g = 0; g < 3; g++) {
         if(periods[perRef[row]][g] < nbLineBef && periods[perRef[row]][g]!=row) {
-          response.append({ "addItem": [periods[perRef[row]][g]] });
+          displayReference(periods[perRef[row]][g]);
         }
       }
     }
@@ -125,11 +125,11 @@ function handleSelectLinks() {
               if(perRef[r] > -1) {
                 for(let g = 0; g < 3; g++) {
                   if(periods[perRef[r]][g]!=-1) {
-                    response.append({ "addItem": [r] });
+                    displayReference(r);
                   }
                 }
               } else {
-                response.append({ "addItem": [r] });
+                displayReference(r);
               }
             }
           }
@@ -140,7 +140,7 @@ function handleSelectLinks() {
           for(let d = 4; d < colNumb - 1; d++) {
             for(let f = 0; f < values[r][d].length; f++) {
               if(row!=r && searching(r, d, f)) {
-                response.append({ "addItem": [r] });
+                displayReference(r);
               }
             }
           }
@@ -450,7 +450,7 @@ function check() {
         values[c][0].push(periods[i][3][m]);
       }
       data.push([[], [], [], z, [], []]);
-      data[z][0].append();
+      data[z][0].push();
       continue;
     }
     data[z][0] = false;
@@ -1010,16 +1010,16 @@ function check() {
       prevLine[sheetCodeName] = i + 1;
     }
     if(colors[i]!=color || fonts[i]!=font || updateRegularity) {
-      response.append({ "range_updateRegularity": [i + 1, colNumb-1] });
+      response.push({ "range_updateRegularity": [i + 1, colNumb-1] });
       if(colors[i]!=color || updateRegularity) {
         if(color) {
-          response.append({ "color_updateRegularity": [color] });
+          response.push({ "color_updateRegularity": [color] });
         } else {
-          response.append({ "clear_updateRegularity": [] });
+          response.push({ "clear_updateRegularity": [] });
         }
       }
       if(fonts[i]!=font || updateRegularity) {
-        response.append({ "font_updateRegularity": [font] });
+        response.push({ "font_updateRegularity": [font] });
       }
       colors[i]=color
       fonts[i]=font
@@ -1028,9 +1028,9 @@ function check() {
   iL = Math.min(prevLine[sheetCodeName], prevLineBef);
   iU = Math.max(prevLine[sheetCodeName], prevLineBef);
   for(let i = iL; i<iU; i++) {
-    response.append({ "styleBorders": [i, 0, colNumb, iL == prevLineBef] });
+    response.push({ "styleBorders": [i, 0, colNumb, iL == prevLineBef] });
   }
-  response.append({ "checkSuccess": [] });
+  response.push({ "checkSuccess": [] });
   resolved[sheetCodeName] = true;
   handleSelectLinks();
 }
@@ -1158,15 +1158,12 @@ function midToWhite(theMsgType = msgType.ERROR) {
   return RGB(newR, newG, newB);
 }
 
-function inconsist(i, j, message, suggs, theAction = Actions.NewVal) {
-  if(!"listBoxList" in response[0]) {
-    response[0]["listBoxList"] = [];
-    for (const key in msgType) {
-      response[0]["listBoxList"].append([]);
-    }
-  }
-  response[0]["listBoxList"][msgType.ERROR].push({color: msgTypeColors[msgType.ERROR], msg: message, actions: [{action: Actions.Select, address: [i, j]}]});
+function displayReference(row) {
+  response[0]["listBoxList"][msgType.RELATIVES].push({color: msgTypeColors[msgType.RELATIVES], msg: "; ".join(values[r][0]), actions: [{action: Actions.Select, address: [row, 0]}]});
+}
 
+function inconsist(i, j, message, suggs, theAction = Actions.NewVal) {
+  response[0]["listBoxList"][msgType.ERROR].push({color: msgTypeColors[msgType.ERROR], msg: message, actions: [{action: Actions.Select, address: [i, j]}]});
   suggs.forEach(sugg => {
     let theNewVal = sugg;
     if (theAction == Actions.NewVal) {
@@ -1213,7 +1210,7 @@ function correct() {
       let value = values[i][j].join("; ");
       if (values0[i][j] != value) {
         values0[i][j] = value;
-        response.append({ "chgValue": [i + 1, j + 1, value] });
+        response.push({ "chgValue": [i + 1, j + 1, value] });
       }
     }
   }
@@ -1341,7 +1338,7 @@ function dataGeneratorSub() {
           // })
           .join("\t")
       ).join("\n");
-  response.append({ "sort": [result] });
+  response.push({ "sort": [result] });
 
 
 }
@@ -1384,7 +1381,7 @@ function renameSymbol(oldValue, newValue) {
     }
   }
   correct();
-  response.append({ "Renamings": [`renamed (${nbRen})`] });
+  response.push({ "Renamings": [`renamed (${nbRen})`] });
   check();
 }
 
@@ -1397,8 +1394,8 @@ function handleoldNameInputClick() {
 
     rowId = Math.min(rowId, range.rowIndex);
   }
-  response.append({ "oldNameInput": [values[rowId][0].join("; ")] });
-  response.append({ "newNameInput": [values[rowId][0].join("; ")] });
+  response.push({ "oldNameInput": [values[rowId][0].join("; ")] });
+  response.push({ "newNameInput": [values[rowId][0].join("; ")] });
 }
 
 function ctrlZ() {
@@ -1436,16 +1433,14 @@ function getColumnColor(body, headerColors) {
   }
 }
 
-function checkSquarBrackets(i) {
-  return 1;
-}
-
 function executeJS(body) {
-  response = [{}];
+  response = [{"listBoxList": []}];
+  for (const key in msgType) {
+    response[0]["listBoxList"].push([]);
+  }
   const funcName = body.functionName;
   if (funcName === 'handleChange') {
-    inconsist(0, 0, "hello", "yo");
-    //handleChange(body.changes);
+    handleChange(body.changes);
   } else if (funcName === 'selectionChange') {
     selectedCells[sheetCodeName] = body.selection;
     handleSelectLinks();
@@ -1459,7 +1454,7 @@ function executeJS(body) {
     let alreadyLabelled;
     let missingNamesNb = Object.keys(allColumnNames).length;
     resolved[sheetCodeName] = false;
-    for(let j = 0; j < values[0].length; i++) {
+    for(let j = 0; j < values[0].length; j++) {
       alreadyLabelled = "";
       values[0][j] = values[0][j].split(";").map((value) => value.trim()).filter((value) => value !== "");
       for(let k = 0; k < values[0][j].length; k++) {
@@ -1522,6 +1517,7 @@ function executeJS(body) {
   } else if (funcName == "ctrlY") {
     ctrlY();
   } else if (funcName == "newSheet") {
+    sheetCodeName = body.sheetCodeName
     values0[sheetCodeName] = body.values;
     sorting[sheetCodeName] = false;
     prevLine[sheetCodeName] = 0;
@@ -1531,6 +1527,16 @@ function executeJS(body) {
 // Endpoint to call JavaScript functions
 app.post('/execute', (req, res) => {
   executeJS(req.body);
+  let empty = true;
+  for (const msgT in response[0]["listBoxList"]) {
+    if(msgT.length) {
+      empty = false;
+      break;
+    }
+  }
+  if(empty) {
+    delete response[0]["listBoxList"];
+  }
   res.json(response);
 });
 
