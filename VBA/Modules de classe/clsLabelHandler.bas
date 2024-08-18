@@ -11,8 +11,8 @@ End Enum
 Private Sub LabelControl_Click()
     With ThisWorkbook.listBoxList(ThisWorkbook.sheetCodeName)
         Dim LBInd As Integer
-        LBInd = (CInt(Mid(LabelControl.Name, Len(ThisWorkbook.ListSuggSt) + 1)))
-        If LBInd > .ListCount - 1 Then
+        LBInd = (CInt(Mid(LabelControl.Name, Len(ThisWorkbook.ListSuggSt) + 1))) + 1
+        If LBInd > .Count Then
             Exit Sub
         End If
         For Each Action In .item(LBInd)
@@ -28,4 +28,5 @@ Private Sub LabelControl_Click()
         Next Action
     End With
 End Sub
+
 
