@@ -4,7 +4,6 @@ Dim labelHeight As Integer
 Dim labelSpacing As Integer
 Dim labelWidth As Integer
 Dim avgCharWidth As Integer
-
 Dim sheetList As Object
 Dim requests As Collection
 Dim timerStarted As Boolean
@@ -12,35 +11,15 @@ Dim lastIsChg As Boolean
 Dim sheetVBA As Worksheet
 Dim sheet As Worksheet
 Dim sorting As Object
-Dim sheetCodeName As String
 Dim targetAddress As Object
-Dim listBoxList As Object
 Dim newCollection As Collection
 
+Private LabelHandlers As Collection
 
-Enum Actions
-    SelectAction = 1
-    NewValAction = 2
-    NewBgColAction = 3
-End Enum
+Public sheetCodeName As String
+Public listBoxList As Object
+Public ListSuggSt As String
 
-
-Sub LabelClickHandler(labelIndex As Integer)
-    If listBoxList(sheetCodeName)(labelIndex)("sheetCodeName") <> sheetCodeName Then
-        Exit Sub
-    End If
-    For Each Action In listBoxList(sheetCodeName)(labelIndex)
-        Select Case Action("action")
-        Case Actions.SelectAction
-            Action("address").Select
-        Case Actions.NewValAction
-            Action("address").Value = Action("newVal")
-        Case Actions.NewBgColAction
-            Action("address").Interior.color = Action("newVal")
-            CallJavaScriptFunctionAsync "chgSheet", False, "sheetCodeName", sheetCodeName
-        End Select
-    Next Action
-End Sub
 
 Public Sub CheckHttpResponse()
     Dim http As Object
@@ -82,6 +61,8 @@ Public Sub CheckHttpResponse()
                         '     Set range = sheet.range(sheet.Cells(CInt(VBARequestParts(1)) + 1, 1), sheet.Cells(CInt(VBARequestParts(1)) + 1, 1))
                         '     range.Select
                         Case "listBoxList"
+                            Dim nextTopLabel As Integer
+                            nextTopLabel = labelTopPos
                             Dim ctrl As Control
                             Dim i As Integer
                             
@@ -90,14 +71,15 @@ Public Sub CheckHttpResponse()
                                 Set ctrl = UserForm1.Controls(i)
                                 
                                 ' Check if the control is a label and was dynamically added
-                                If TypeName(ctrl) = "Label" And ctrl.Tag = "ListSugg" Then
+                                If TypeName(ctrl) = "Label" And ctrl.Tag = ListSuggSt Then
                                     UserForm1.Controls.Remove ctrl.Name
                                 End If
                             Next i
                             
                             Dim acc As Integer
                             acc = 0
-                            ' Set newCollection = New Collection
+                            Set LabelHandlers = New Collection
+                            Dim labelHandler As clsLabelHandler
                             Set listBoxList(sheetCodeName) = New Collection
                             Dim subItem As Variant
                             For Each subItem In item(key)
@@ -108,14 +90,35 @@ Public Sub CheckHttpResponse()
                                     Set ctrl = UserForm1.Controls.Add("Forms.Label.1")
                                     With ctrl
                                         .Caption = oneListItem("msg")
+                                        .Top = nextTopLabel
                                         .Left = labelLeftPos
                                         .Width = labelWidth
                                         .WordWrap = True ' Enable word wrap
+                                        
+
+
+                                        Dim labelLines As Integer
+                                        Dim lines() As String
+                                        Dim line As Variant
+                                        Dim lineWidth As Single
+                                        ' ' Split the text into lines
+                                        ' lines = Split(oneListItem("msg"), vbCrLf)
+                                        
+                                        ' ' Loop through each line and measure its width
+                                        ' For Each line In lines
+                                        '     lineWidth = UserForm1.TextWidth(line)
+                                        '     If lineWidth > labelWidth Then
+                                        '         labelLines = labelLines + 1
+                                        '     End If
+                                        '     labelLines = labelLines + 1
+                                        ' Next line
+
+
+
+
 
                                         ' Calculate the number of lines in the label
-                                        Dim labelLines As Integer
                                         Dim textLength As Integer
-                                        Dim lineWidth As Integer
                                         
                                         ' Estimate the average character width (this may need adjustment based on font)
                                         lineWidth = labelWidth / avgCharWidth
@@ -124,36 +127,38 @@ Public Sub CheckHttpResponse()
                                         Dim pos As Integer
                                         Dim pos0 As Integer
                                         pos0 = 1
-                                        pos = InStr(1, item(key)(1), vbLf)
+                                        pos = InStr(1, oneListItem("msg"), vbLf)
                                         If pos = 0 Then
-                                            pos = Len(item(key)(1)) + 1
+                                            pos = Len(oneListItem("msg")) + 1
                                         End If
                                         labelLines = 0
                                         Do While pos > 0
                                             ' Calculate the number of lines based on text length and line width
+                                            ' labelLines = labelLines + Int((pos - pos0) / lineWidth) + 1
                                             labelLines = labelLines + Int((pos - pos0) / lineWidth) + 1
 
-                                            pos = InStr(pos + 1, item(key)(1), vbLf)
+                                            pos = InStr(pos + 1, oneListItem("msg"), vbLf)
                                         Loop
                                         
                                         ' Adjust the height based on the number of lines
                                         .Height = labelHeight * labelLines
+                                        nextTopLabel = nextTopLabel + .Height
                                         
                                         ' Assign a unique name or tag
-                                        .Name = "ListSugg" & acc
-                                        .Tag = "ListSugg"
+                                        .Name = ListSuggSt & acc
+                                        .Tag = ListSuggSt
                                         
                                         ' Set colors for each item
-                                        .BackColor = oneListItem("color")
-
-                                        oneListItem("actions").Add "sheetCodeName", sheetCodeName
+                                        .ForeColor = RGB(oneListItem("color")("r"), _
+                                                        oneListItem("color")("g"), _
+                                                        oneListItem("color")("b"))
 
                                         ' Assign the address to the action
                                         For Each Action In oneListItem("actions")
-                                            If Action("address") = 0 Then
+                                            If IsNumeric(Action("address")) Then
                                                 Action("address") = callAddress
                                             Else
-                                                callAddress = sheet.Cells(Action("address")(0), Action("address")(1))
+                                                callAddress = sheet.Cells(Action("address")(1) + 1, Action("address")(2) + 1)
                                                 Action("address") = callAddress
                                             End If
                                         Next Action
@@ -161,10 +166,14 @@ Public Sub CheckHttpResponse()
                                         listBoxList(sheetCodeName).Add oneListItem("actions")
 
                                         acc = acc + 1
-
-                                        ' Assign the macro to the label's Click event
-                                        .Object.OnAction = "'LabelClickHandler " & i & "'"
                                     End With
+                                        
+                                    ' Create a new instance of the label handler
+                                    Set labelHandler = New clsLabelHandler
+                                    Set labelHandler.LabelControl = ctrl
+                                    
+                                    ' Add the handler to the collection
+                                    LabelHandlers.Add labelHandler
                                 Next oneListItem
                             Next subItem
                         ' Case "sort"
@@ -232,47 +241,41 @@ Private Sub Worksheet_SelectionChange(ByVal Target As range)
     CallJavaScriptFunctionAsync "selectionChange", True, "selectedCells", Target.Address
 End Sub
 
-' Define a custom type
-Type TwoLists
-    headerColors As Variant
-    myArray As Variant
-End Type
-
-Private Sub give_headerColors(Optional newColCount As Long) As TwoLists
-    If newColCount Is Nothing Then
+Public Sub give_headerColors(Optional newColCount As Long)
+    If newColCount = 0 Then
         ' Determine the last column by finding the last non-empty cell in the header row
-        newColCount = sheetVBA.Cells(headerRow, sheetVBA.Columns.Count).End(xlToLeft).Column
+        newColCount = sheetVBA.Cells(1, sheetVBA.Columns.Count).End(xlToLeft).Column
     End If
     ' get the color of each header
-    Dim headerColors(1 To newColCount) As Variant
+    Dim headerColors() As Variant
+    ReDim headerColors(1 To newColCount)
     Dim j As Long
     For j = 1 To newColCount
         headerColors(j) = sheetVBA.Cells(1, j).Interior.color
     Next j
-    
-    Dim result As TwoLists
-    Set result.headerColors = headerColors
-    Set result.myArray = myArray
-    CallJavaScriptFunctionAsync "chgSheet", False, "sheetCodeName", sheetCodeName, "headerColors", headerColors
+    CallJavaScriptFunctionAsync "chgSheet", True, "sheetCodeName", sheetCodeName, "headerColors", headerColors
 End Sub
 
 Private Sub Workbook_SheetActivate(ByVal Sh As Object)
     Set sheetVBA = Sh
     sheetCodeName = Sh.codeName
     If Not sheetList.Exists(sheetCodeName) Then
-        Dim result As TwoLists
-        Set result.headerColors = headerColors
-        Set result.myArray = myArray
-        give_headerColors = result
+        ' Get the used range
+        Dim usedRange As range
+        Dim myArray As Variant
+        Set usedRange = Sh.usedRange
+        myArray = usedRange.Value
 
-        CallJavaScriptFunctionAsync "newSheet", False, "sheetCodeName", sheetCodeName, "values", result.myArray
+        CallJavaScriptFunctionAsync "newSheet", False, "sheetCodeName", sheetCodeName, "values", myArray
         
         ' Add the data to the dictionary
         sheetList.Add sheetCodeName, Sh
         sorting.Add sheetCodeName, False
         targetAddress.Add sheetCodeName, Application.Selection.Address
-        Set newCollection = New Collection
-        listBoxList.Add sheetCodeName, newCollection
+        listBoxList.Add sheetCodeName, null
+        give_headerColors UBound(myArray, 2)
+    Else
+        give_headerColors
     End If
     CallJavaScriptFunctionAsync "selectionChange", True, "selection", targetAddress(sheetCodeName)
 End Sub
@@ -393,16 +396,12 @@ ErrorHandler:
     MsgBox "Error: " & Err.Description
 End Sub
 
-Private Sub sendHTTP()
-
-End Sub
-
 Private Sub Workbook_Open()
     labelTopPos = 150
     labelLeftPos = 0
     labelHeight = 18
     labelSpacing = 0
-    labelWidth = 18
+    labelWidth = 114
     avgCharWidth = 6 ' Adjust this value based on your font size and type
 
     Call Shell("cmd.exe /C C:\Users\abarb\Documents\health\news_underground\mediaSorter\programs\excel_prog\mediaSorter\my-js-server\startNodeJS.bat", vbHide)
@@ -432,12 +431,13 @@ Private Sub Workbook_Open()
     UserForm1.ctrlZButton.Caption = "ctrlZ"
     UserForm1.ctrlYButton.Caption = "ctrlY"
     UserForm1.PowerPointButton.Caption = "PowerPoint"
-    UserForm1.Renamings.Caption = ""
     UserForm1.Show vbModeless ' Show the UserForm without blocking Excel
 
     Set sheetList = CreateObject("Scripting.Dictionary")
     Set sorting = CreateObject("Scripting.Dictionary")
     Set targetAddress = CreateObject("Scripting.Dictionary")
     Set listBoxList = CreateObject("Scripting.Dictionary")
+    ListSuggSt = "ListSugg"
     Workbook_SheetActivate activeSheet
 End Sub
+

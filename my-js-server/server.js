@@ -1456,7 +1456,11 @@ function executeJS(body) {
     resolved[sheetCodeName] = false;
     for(let j = 0; j < values[0].length; j++) {
       alreadyLabelled = "";
-      values[0][j] = values[0][j].split(";").map((value) => value.trim()).filter((value) => value !== "");
+      if(values[0][j] == null) {
+        values[0][j] = []
+      } else {
+        values[0][j] = values[0][j].split(";").map((value) => value.trim()).filter((value) => value !== "");
+      }
       for(let k = 0; k < values[0][j].length; k++) {
         let name = values[0][j][k];
         if(name in allColumnNames) {
@@ -1483,11 +1487,15 @@ function executeJS(body) {
       }
     }
     if(missingNamesNb) {
-      inconsist(0, 0, `Missing columns: ${Object.keys(allColumnNames).filter((name) => headerNames[name] === undefined).join(", ")}.`, []);
+      let suggs = Object.keys(allColumnNames).filter((name) => headerNames[name] === undefined);
+      let lastCol = values[0].length;
+      let actions = [{action: Actions.Select, address: [0, lastCol]}];
+      suggs.forEach(sugg => {
+        actions.push({action: Actions.NewVal, address: [0, lastCol], newVal: sugg});
+        lastCol+=1;
+      });
+      response[0]["listBoxList"][msgType.ERROR].push({color: msgTypeColors[msgType.ERROR], msg: `Missing columns: ${suggs.join(", ")}.`, actions: actions});
       return;
-    }
-    if (namesColor === undefined) {
-      inconsist(0, 0, `No "names" header found`, [allColumnNames.NAMES]);
     }
     columnTypes = [];
     let condColor;
