@@ -1,3 +1,5 @@
+Private Declare PtrSafe Function Sleep Lib "kernel32" (ByVal dwMilliseconds As Long) As Long
+
 Dim labelTopPos As Integer
 Dim labelLeftPos As Integer
 Dim labelHeight As Integer
@@ -13,6 +15,7 @@ Dim sheet As Worksheet
 Dim sorting As Object
 Dim targetAddress As Object
 Dim newCollection As Collection
+Dim logFile As String
 
 Private LabelHandlers As Collection
 
@@ -272,7 +275,7 @@ Private Sub Workbook_SheetActivate(ByVal Sh As Object)
         sheetList.Add sheetCodeName, Sh
         sorting.Add sheetCodeName, False
         targetAddress.Add sheetCodeName, Application.Selection.Address
-        listBoxList.Add sheetCodeName, null
+        listBoxList.Add sheetCodeName, Null
         give_headerColors UBound(myArray, 2)
     Else
         give_headerColors
@@ -329,6 +332,25 @@ Private Sub Workbook_BeforeClose(Cancel As Boolean)
     Call Shell("cmd.exe /C C:\Users\abarb\Documents\health\news_underground\mediaSorter\programs\excel_prog\mediaSorter\my-js-server\stopNodeJS.bat", vbHide)
 End Sub
 
+Sub ClearTextFile(filePath As String)
+    ' Open the file for output, which will clear its contents
+    Open filePath For Output As #1
+    
+    ' Immediately close the file, leaving it empty
+    Close #1
+End Sub
+
+Function AddLineToTextFile(filePath As String, textToAdd As String)
+    ' Open the file for appending (this will add text without erasing existing content)
+    Open filePath For Append As #1
+    
+    ' Write the new line of text to the file
+    Print #1, textToAdd
+    
+    ' Close the file to save changes
+    Close #1
+End Function
+
 Public Sub CallJavaScriptFunctionAsync(ByVal funcName As String, ParamArray params() As Variant)
     Dim i As Integer, j As Integer
     On Error GoTo ErrorHandler
@@ -383,7 +405,9 @@ Public Sub CallJavaScriptFunctionAsync(ByVal funcName As String, ParamArray para
     
     ' Send the request with the function name and parameters
     http.send jsonRequest
-    Debug.Print "Invoke-RestMethod -Uri http://localhost:3000/execute -Method Post -Headers @{ ""Content-Type"" = ""application/json"" } -Body '" & jsonRequest & "'"
+
+    ' Add lines of text to the file
+    AddLineToTextFile logFile, "Invoke-RestMethod -Uri http://localhost:3000/execute -Method Post -Headers @{ ""Content-Type"" = ""application/json"" } -Body '" & jsonRequest & "'"
     
     ' Start the timer to check the response periodically
     If params(LBound(params)) And Not timerStarted Then
@@ -396,6 +420,53 @@ ErrorHandler:
     MsgBox "Error: " & Err.Description
 End Sub
 
+Sub RunAndWait(command As String)
+    Dim wsh As Object
+    Dim waitOnReturn As Boolean
+    Dim windowStyle As Integer
+    Dim process As Object
+    
+    ' Create WScript.Shell object
+    Set wsh = VBA.CreateObject("WScript.Shell")
+    
+    ' Set parameters
+    waitOnReturn = True
+    windowStyle = 0 ' 0 = vbHide
+    
+    ' Run the command and wait for it to complete
+    Set process = wsh.Exec(command)
+    
+    ' Wait for process to complete
+    Do While process.Status = 0
+        DoEvents ' Keeps the VBA application responsive during the wait
+    Loop
+End Sub
+
+Function CheckIfServerIsUp() As Boolean
+    On Error Resume Next
+    
+    Dim url As String
+    url = "http://localhost:3000/execute"
+    ' Open the request
+    http.Open "POST", url, True
+    
+    ' Set the request headers
+    http.setRequestHeader "Content-Type", "application/json"
+    
+    ' Send the request with the function name and parameters
+    http.send "checkServer"
+    
+    ' Check the status of the response
+    If http.Status = 200 Then
+        CheckIfServerIsUp = True
+    Else
+        CheckIfServerIsUp = False
+    End If
+    
+    Set http = Nothing
+    On Error GoTo 0
+End Function
+
 Private Sub Workbook_Open()
     labelTopPos = 150
     labelLeftPos = 0
@@ -404,7 +475,32 @@ Private Sub Workbook_Open()
     labelWidth = 114
     avgCharWidth = 6 ' Adjust this value based on your font size and type
 
+    RunAndWait("cmd.exe /C C:\Users\abarb\Documents\health\news_underground\mediaSorter\programs\excel_prog\mediaSorter\my-js-server\stopNodeJS.bat")
+    
     Call Shell("cmd.exe /C C:\Users\abarb\Documents\health\news_underground\mediaSorter\programs\excel_prog\mediaSorter\my-js-server\startNodeJS.bat", vbHide)
+    
+    Dim isServerUp As Boolean
+    Dim serverStarted As Boolean
+    Dim waitTime As Long
+    
+    ' Set your server's address and port here
+    waitTime = 1000 ' 1 second
+    ' Wait for the server to start by checking if the port is open
+    serverStarted = False
+    
+    Do While Not serverStarted
+        isServerUp = CheckIfServerIsUp
+        
+        If isServerUp Then
+            serverStarted = True
+        Else
+            Sleep waitTime ' Wait for 1 second before trying again
+        End If
+        
+        DoEvents ' Keep the VBA application responsive during the wait
+    Loop
+
+
     timerStarted = False
     lastIsChg = False
     Set requests = New Collection
@@ -438,6 +534,8 @@ Private Sub Workbook_Open()
     Set targetAddress = CreateObject("Scripting.Dictionary")
     Set listBoxList = CreateObject("Scripting.Dictionary")
     ListSuggSt = "ListSugg"
+    logFile = "C:\Users\abarb\Documents\health\news_underground\mediaSorter\programs\excel_prog\mediaSorter\log.txt"
+    ClearTextFile logFile
     Workbook_SheetActivate activeSheet
 End Sub
 
