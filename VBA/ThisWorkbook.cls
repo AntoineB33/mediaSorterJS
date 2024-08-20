@@ -1,4 +1,5 @@
 Private Declare PtrSafe Function Sleep Lib "kernel32" (ByVal dwMilliseconds As Long) As Long
+Private Declare PtrSafe Sub GetLocalTime Lib "kernel32" (lpSystemTime As SYSTEMTIME)
 
 Dim labelTopPos As Integer
 Dim labelLeftPos As Integer
@@ -23,6 +24,16 @@ Public sheetCodeName As String
 Public listBoxList As Object
 Public ListSuggSt As String
 
+Private Type SYSTEMTIME
+    wYear As Integer
+    wMonth As Integer
+    wDayOfWeek As Integer
+    wDay As Integer
+    wHour As Integer
+    wMinute As Integer
+    wSecond As Integer
+    wMilliseconds As Integer
+End Type
 
 Public Sub CheckHttpResponse()
     Dim http As Object
@@ -86,7 +97,7 @@ Public Sub CheckHttpResponse()
                             Set listBoxList(sheetCodeName) = New Collection
                             Dim subItem As Variant
                             For Each subItem In item(key)
-                                Dim callAddress As Variant
+                                Dim callAddress As range
                                 Dim oneListItem As Variant
                                 For Each oneListItem In subItem
                                     ' Create a new label
@@ -156,17 +167,60 @@ Public Sub CheckHttpResponse()
                                                         oneListItem("color")("g"), _
                                                         oneListItem("color")("b"))
 
-                                        ' Assign the address to the action
+
+
+
+                                        Dim modifiedActions As Collection
+                                        Dim oneModifiedAction As Dictionary
+
+                                        ' Create a new Collection to store the modified actions
+                                        Set modifiedActions = New Collection
+
                                         For Each Action In oneListItem("actions")
-                                            If IsNumeric(Action("address")) Then
-                                                Action("address") = callAddress
-                                            Else
-                                                callAddress = sheet.Cells(Action("address")(1) + 1, Action("address")(2) + 1)
-                                                Action("address") = callAddress
-                                            End If
+                                            ' Create a new Dictionary for each action
+                                            Set oneModifiedAction = New Dictionary
+                                            
+                                            ' Copy the existing Action into the new Dictionary
+                                            For Each key2 In Action.Keys
+                                                If key2 = "address" Then
+                                                    ' Modify the "address" field
+                                                    If IsNumeric(Action("address")) Then
+                                                        ' Store the Range reference directly in the new Dictionary
+                                                        Set oneModifiedAction("address") = callAddress
+                                                    Else
+                                                        ' Calculate the cell reference and store it
+                                                        Set callAddress = sheet.Cells(Action("address")(1) + 1, Action("address")(2) + 1)
+                                                        Set oneModifiedAction("address") = callAddress
+                                                    End If
+                                                Else
+                                                    ' Handle other object types as needed
+                                                    oneModifiedAction(key2) = Action(key2)
+                                                End If
+                                            Next key2
+                                            
+                                            ' Add the modified action to the collection
+                                            modifiedActions.Add oneModifiedAction
                                         Next Action
 
-                                        listBoxList(sheetCodeName).Add oneListItem("actions")
+                                        ' Add the modified actions collection to the listBoxList (or wherever you need to store them)
+                                        listBoxList(sheetCodeName).Add modifiedActions
+
+
+
+
+
+
+                                        ' ' Assign the address to the action
+                                        ' For Each Action In oneListItem("actions")
+                                        '     If IsNumeric(Action("address")) Then
+                                        '         Action("address") = callAddress
+                                        '     Else
+                                        '         Set callAddress = sheet.Cells(Action("address")(1) + 1, Action("address")(2) + 1)
+                                        '         Action("address") = callAddress
+                                        '     End If
+                                        ' Next Action
+
+                                        ' listBoxList(sheetCodeName).Add oneListItem("actions")
 
                                         acc = acc + 1
                                     End With
@@ -351,9 +405,54 @@ Function AddLineToTextFile(filePath As String, textToAdd As String)
     Close #1
 End Function
 
+' Helper function to check if a file exists
+Function fileExists(filePath As String) As Boolean
+    Dim fso As Object
+    Set fso = CreateObject("Scripting.FileSystemObject")
+    fileExists = fso.fileExists(filePath)
+End Function
+
+' Helper function to check if a line exists in a file
+Function LineExistsInFile(filePath As String, searchString As String) As Boolean
+    Dim fso As Object
+    Dim file As Object
+    Dim line As String
+    
+    Set fso = CreateObject("Scripting.FileSystemObject")
+    
+    If fso.fileExists(filePath) Then
+        Set file = fso.OpenTextFile(filePath, 1)
+        
+        Do While Not file.AtEndOfStream
+            line = file.ReadLine
+            If InStr(line, searchString) > 0 Then
+                LineExistsInFile = True
+                file.Close
+                Exit Function
+            End If
+        Loop
+        
+        file.Close
+    End If
+    
+    LineExistsInFile = False
+End Function
+
+Function GetPreciseLocalTimestamp() As String
+    Dim st As SYSTEMTIME
+    GetLocalTime st
+    GetPreciseLocalTimestamp = _
+        Format(st.wYear, "0000") & "-" & _
+        Format(st.wMonth, "00") & "-" & _
+        Format(st.wDay, "00") & " " & _
+        Format(st.wHour, "00") & ":" & _
+        Format(st.wMinute, "00") & ":" & _
+        Format(st.wSecond, "00") & "." & _
+        Format(st.wMilliseconds, "000")
+End Function
+
 Public Sub CallJavaScriptFunctionAsync(ByVal funcName As String, ParamArray params() As Variant)
     Dim i As Integer, j As Integer
-    On Error GoTo ErrorHandler
     Dim http As Object
     Set http = CreateObject("MSXML2.XMLHTTP")
     
@@ -376,12 +475,18 @@ Public Sub CallJavaScriptFunctionAsync(ByVal funcName As String, ParamArray para
     
     
 
+    ' Generate the timestamp
+    Dim timestamp As String
+    timestamp = funcName & " " & GetPreciseLocalTimestamp
     
     ' Create JSON request body
     Dim jsonRequest As String
     If UBound(params) > 0 Then
         Dim json As Object
         Set json = CreateObject("Scripting.Dictionary")
+
+        json.Add "timestamp", timestamp
+
         json.Add "functionName", funcName
         For i = LBound(paramsArray) To UBound(paramsArray) Step 2
             json.Add paramsArray(i), paramsArray(i + 1)
@@ -406,6 +511,65 @@ Public Sub CallJavaScriptFunctionAsync(ByVal funcName As String, ParamArray para
     ' Send the request with the function name and parameters
     http.send jsonRequest
 
+
+    
+    ' Wait and check if the acknowledgment file exists
+    Dim fileExists As Boolean
+    Dim attempts As Integer
+    attempts = 0
+
+    Do
+        attempts = attempts + 1
+        fileExists = LineExistsInFile("C:\\Users\\abarb\\Documents\\health\\news_underground\\mediaSorter\\programs\\excel_prog\\mediaSorter\\received.txt", timestamp)
+
+        If fileExists Then
+            Exit Do
+        End If
+
+        ' Wait for a short time before checking again
+        Application.Wait (Now + TimeValue("0:00:01"))
+
+        ' Optionally limit the number of attempts
+        If attempts > 10 Then
+            Debug.Print "connection error"
+            Exit Do
+        End If
+    Loop
+
+    
+
+
+    ' Dim serverStarted As Boolean
+    ' Dim waitTime As Long
+    
+    ' ' Set your server's address and port here
+    ' waitTime = 1000 ' 1 second
+    ' ' Wait for the server to start by checking if the port is open
+    ' serverStarted = False
+    
+    ' Do While Not serverStarted
+    
+    '     Debug.Print "http.readyState"
+    '     If http.readyState = 4 Then
+    '         Debug.Print "http.Status"
+    '         If http.Status = 200 Then
+    '             Debug.Print "True"
+    '             serverStarted = True
+    '         Else
+    '             Debug.Print "sleep2"
+    '             Sleep waitTime ' Wait for 1 second before trying again
+    '         End If
+    '     Else
+    '         Debug.Print "sleep"
+    '         Sleep waitTime ' Wait for 1 second before trying again
+    '     End If
+    '     Debug.Print "True"
+    '     DoEvents
+    ' Loop
+    ' Debug.Print "6"
+
+
+
     ' Add lines of text to the file
     AddLineToTextFile logFile, "Invoke-RestMethod -Uri http://localhost:3000/execute -Method Post -Headers @{ ""Content-Type"" = ""application/json"" } -Body '" & jsonRequest & "'"
     
@@ -414,58 +578,23 @@ Public Sub CallJavaScriptFunctionAsync(ByVal funcName As String, ParamArray para
         CheckHttpResponse
         timerStarted = True
     End If
-    Exit Sub
-
-ErrorHandler:
-    MsgBox "Error: " & Err.Description
 End Sub
 
 Sub RunAndWait(command As String)
     Dim wsh As Object
-    Dim waitOnReturn As Boolean
-    Dim windowStyle As Integer
     Dim process As Object
     
     ' Create WScript.Shell object
     Set wsh = VBA.CreateObject("WScript.Shell")
-    
-    ' Set parameters
-    waitOnReturn = True
-    windowStyle = 0 ' 0 = vbHide
     
     ' Run the command and wait for it to complete
     Set process = wsh.Exec(command)
     
     ' Wait for process to complete
     Do While process.Status = 0
-        DoEvents ' Keeps the VBA application responsive during the wait
+        Sleep 1
     Loop
 End Sub
-
-Function CheckIfServerIsUp() As Boolean
-    On Error Resume Next
-    
-    Dim url As String
-    url = "http://localhost:3000/execute"
-    ' Open the request
-    http.Open "POST", url, True
-    
-    ' Set the request headers
-    http.setRequestHeader "Content-Type", "application/json"
-    
-    ' Send the request with the function name and parameters
-    http.send "checkServer"
-    
-    ' Check the status of the response
-    If http.Status = 200 Then
-        CheckIfServerIsUp = True
-    Else
-        CheckIfServerIsUp = False
-    End If
-    
-    Set http = Nothing
-    On Error GoTo 0
-End Function
 
 Private Sub Workbook_Open()
     labelTopPos = 150
@@ -475,30 +604,33 @@ Private Sub Workbook_Open()
     labelWidth = 114
     avgCharWidth = 6 ' Adjust this value based on your font size and type
 
-    RunAndWait("cmd.exe /C C:\Users\abarb\Documents\health\news_underground\mediaSorter\programs\excel_prog\mediaSorter\my-js-server\stopNodeJS.bat")
+    RunAndWait ("cmd.exe /C C:\Users\abarb\Documents\health\news_underground\mediaSorter\programs\excel_prog\mediaSorter\stopNodeJS.bat")
     
-    Call Shell("cmd.exe /C C:\Users\abarb\Documents\health\news_underground\mediaSorter\programs\excel_prog\mediaSorter\my-js-server\startNodeJS.bat", vbHide)
+    Call Shell("cmd.exe /C C:\Users\abarb\Documents\health\news_underground\mediaSorter\programs\excel_prog\mediaSorter\startNodeJS.bat", vbHide)
     
-    Dim isServerUp As Boolean
-    Dim serverStarted As Boolean
-    Dim waitTime As Long
+    Sleep 3000
     
-    ' Set your server's address and port here
-    waitTime = 1000 ' 1 second
-    ' Wait for the server to start by checking if the port is open
-    serverStarted = False
+    ' Dim isServerUp As Boolean
+    ' Dim serverStarted As Boolean
+    ' Dim waitTime As Long
     
-    Do While Not serverStarted
-        isServerUp = CheckIfServerIsUp
+    ' ' Set your server's address and port here
+    ' waitTime = 1000 ' 1 second
+    ' ' Wait for the server to start by checking if the port is open
+    ' serverStarted = False
+    
+    ' Do While Not serverStarted
+    '     isServerUp = CheckIfServerIsUp
         
-        If isServerUp Then
-            serverStarted = True
-        Else
-            Sleep waitTime ' Wait for 1 second before trying again
-        End If
+    '     If isServerUp Then
+    '         serverStarted = True
+    '     Else
+    '         Debug.Print "issues when starting the server..."
+    '         Sleep waitTime ' Wait for 1 second before trying again
+    '     End If
         
-        DoEvents ' Keep the VBA application responsive during the wait
-    Loop
+    '     DoEvents ' Keep the VBA application responsive during the wait
+    ' Loop
 
 
     timerStarted = False
@@ -538,4 +670,8 @@ Private Sub Workbook_Open()
     ClearTextFile logFile
     Workbook_SheetActivate activeSheet
 End Sub
+
+
+
+
 

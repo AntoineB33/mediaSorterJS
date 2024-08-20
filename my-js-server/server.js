@@ -1,4 +1,5 @@
 const express = require('express');
+const fs = require('fs');
 const { exec } = require('child_process');
 const app = express();
 const port = 3000;
@@ -1452,7 +1453,7 @@ function executeJS(body) {
     headerNames = {};
     let namesColor;
     let alreadyLabelled;
-    let missingNamesNb = Object.keys(allColumnNames).length;
+    let missingNamesNb = Object.values(allColumnNames).length;
     resolved[sheetCodeName] = false;
     for(let j = 0; j < values[0].length; j++) {
       alreadyLabelled = "";
@@ -1487,7 +1488,7 @@ function executeJS(body) {
       }
     }
     if(missingNamesNb) {
-      let suggs = Object.keys(allColumnNames).filter((name) => headerNames[name] === undefined);
+      let suggs = Object.values(allColumnNames).filter((name) => headerNames[name] === undefined);
       let lastCol = values[0].length;
       let actions = [{action: Actions.Select, address: [0, lastCol]}];
       suggs.forEach(sugg => {
@@ -1532,8 +1533,36 @@ function executeJS(body) {
   }
 }
 
+function addLineToFile(filePath, line) {
+  // Add a newline character at the end of the line
+  const lineWithNewline = line + '\n';
+  
+  // Append the line to the file asynchronously
+  fs.appendFile(filePath, lineWithNewline, (err) => {
+      if (err) {
+          console.error('Error writing to file:', err);
+      } else {
+          console.log('Line added to file successfully.');
+      }
+  });
+}
+
 // Endpoint to call JavaScript functions
 app.post('/execute', (req, res) => {
+  const timestamp = req.body.timestamp;
+  
+  // Write the timestamp to the received.txt file
+  fs.appendFile("C:\\Users\\abarb\\Documents\\health\\news_underground\\mediaSorter\\programs\\excel_prog\\mediaSorter\\received.txt", timestamp + '\n', (err) => {
+    if (err) {
+        console.error('Error writing to file:', err);
+        // Handle the error appropriately, e.g., by sending a response with an error message
+    } else {
+        console.log('Timestamp successfully written to file.');
+        // You can also send a success response back to the client here
+    }
+  });
+
+
   executeJS(req.body);
   let empty = true;
   for (const msgT in response[0]["listBoxList"]) {
