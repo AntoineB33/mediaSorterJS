@@ -1,5 +1,7 @@
 const express = require('express');
 const fs = require('fs');
+const acorn = require('acorn');
+const walk = require('acorn-walk');
 const { exec } = require('child_process');
 const app = express();
 const port = 3000;
@@ -41,6 +43,7 @@ var data;
 var headerNames;
 var nameInd;
 var headerColors;
+var attNames;
 
 // [node.js]
 var response;
@@ -66,6 +69,15 @@ const Actions = {
   Select: 1,
   NewVal: 2,
   NewBgCol: 3
+}
+
+
+class Node {
+    constructor(value) {
+        this.value = value;
+        this.left = null;
+        this.right = null;
+    }
 }
 
 
@@ -153,21 +165,30 @@ function handleSelectLinks() {
 }
 
 function handleChange(updates) {
+  var splitValue = [];
   updates.forEach(function(update) {
     var row = update[0] - 1;  // Adjusting for zero-based index
     var column = update[1] - 1;  // Adjusting for zero-based index
     var value = update[2];
     values0[sheetCodeName][row][column] = value;
-    var splitValue = [];
     if(value) {
-      splitValue = value
-          .split(";")
-          .map(function (v, i) {
-            return v.trim().toLowerCase();
-          })
-          .filter(function (e) {
-            return e !== "";
-          });
+      while(headerColors.length <= j) {
+        headerColors.push(null);
+        columnTypes.push(null);
+      }
+      splitValue = (row == 0 || columnTypes[j] == allColumnTypes.ATTRIBUTES?
+            value.split(";"):
+            [value])
+          .map(v => v.trim().toLowerCase())
+          .filter(e => e !== "");
+      if(row == 0) {
+        for(let k = 0; k < splitValue.length; k++) {
+          if(values[0][j][k].match(/^[A-Z]+$/)) {
+            inconsist(0, j, `Column name at ${getAddress(0, column)} is only upper case letters.`, [findNewName(values[0][column][k])]);
+            return;
+          }
+        }
+      }
     }
     // Expand the matrix rows if needed
     while (values.length <= row) {
@@ -238,10 +259,12 @@ function handleChange(updates) {
     return;
   }
   columnTypes = [];
+  attNames = {};
   let condColor;
   for (let j = 0; j < headerColors.length; j++) {
     if (headerColors[j] === namesColor) {
       columnTypes.push(allColumnTypes.ATTRIBUTES);
+      attNames[j] = [];
     } else if (headerColors[j] === null) {
       columnTypes.push(null);
     } else if (condColor === undefined || headerColors[j] === condColor) {
@@ -269,15 +292,22 @@ function getAddress(i, j) {
 function check() {
   resolved[sheetCodeName] = false;
   
-  data = [0];
+  data = [undefined];
   var r;
 
   for (let i = 1; i < nbLineBef; i++) {
-    data.push({"follows":[], "comesAfter":[]});
-    data[-1][allColumnTypes.ATTRIBUTES] = [];
-    data[-1][allColumnTypes.CONDITIONS] = [];
-
-    let cellList = values[i][nameInd]
+    data.push({
+      isNotFollowing: true,
+      precedents: [],
+      follower: -1,
+      follower_to_attrib: [],
+      follower_with_delay: [],
+      followed_with_delay: [],
+      attributes:[],
+      other_conditions:[],
+    });
+    let cellList = values[i][nameInd];
+    // check if a non-empty row has no name
     if(!cellList.length) {
       for (let j = 0; j < values[i].length; j++) {
         if (values[i][j].length !== 0) {
@@ -285,9 +315,11 @@ function check() {
           return;
         }
       }
+      data[i] = undefined;
+      continue;
     }
+    // check if the name is already used
     for (let k = 0; k < cellList.length; k++) {
-      //check if name already before
       for (let r = 1; r <= i; r++) {
         for (let f = 0; f < values[r][nameInd].length; f++) {
           if ((r < i || f < k) && cellList[k]==values[r][nameInd][k]) {
@@ -297,48 +329,22 @@ function check() {
         }
       }
     }
-    
-    let valuesI = values[i][nameInd];
-    for(let k = 0; k < valuesI.length; k++) {
-      let val = sheet[k];
-      let countOpenBr = (val.match(new RegExp(`\\[`, 'g')) || []).length;
-      let countCloseBr = (val.match(new RegExp(`\\]`, 'g')) || []).length;
-      if(countOpenBr || countCloseBr) {
-        let ind = val.indexOf('[');
-        if(val[-1] != ']' || countOpenBr != 1 || countCloseBr != 1 || ind == 0) {
-          val = val.replace(new RegExp(`[\\[\\]]`, 'g'), replacementChar);
-          inconsist_replacing_elem(i, nameInd, k, findNewName(val, false), `The name at ${getAddress(i, nameInd)} includes square brackets, thus should be in the format "attribute[column title]".`)
-          return -1;
-        }
-        valuesI[k] = val.split('[');
-        let columnTitle = valuesI[k][0].slice(0, -1);
-        let found = false;
-        for(let j = 0; j < colNumb; j++) {
-          if(columnTypes[j] == allColumnTypes.ATTRIBUTES && values[0][j].includes(columnTitle)) {
-            found = true;
-            break;
-          }
-        }
-        if(!found) {
-          inconsist_replacing_elem(i, nameInd, k, findNewName(val, false), `The column title "${columnTitle}" in the name at ${getAddress(i, nameInd)} is not found in the attributes.`)
-          return -1;
-        }
-        valuesI[k][0] = valuesI[k][0].trim();
-        valuesI[k] = valuesI[k][0].trim() + (valuesI[k][0].includes(" ")?" ":"") + "[" + valuesI[k][1];
-      }
-    }
   }
   stop = false;
-  let attNames = [];
   attributes = [];
   let acc = 0;
   for (let j = 0; j < colNumb; j++) {
-    attNames.push([]);
     for (let i = 1; i < nbLineBef; i++) {
       for (let k = 1; k < values[i][j].length; i++) {
-        let val = values[i][j][k].toLowerCase();
+        let val = values[i][j][k];
         if (columnTypes[j] == allColumnTypes.CONDITIONS) {
-          
+          let tree = parseExpression(val);
+          let necessarySubformulas = findNecessarySubformulas(tree);
+          for(let r = 0; r < necessarySubformulas.length; r++) {
+            if(necessarySubformulas[r]) {
+              
+            }
+          }
         } else if (columnTypes[j] == allColumnTypes.ATTRIBUTES) {
           for(let r = 0; r < attNames[j].length; r++) {
             if(attNames[j][r] == val) {
@@ -399,6 +405,58 @@ function check() {
       }
     }
     acc += attNames[j - 4].length;
+  }
+  for(let i = 1; i < nbLineBef; i++) {
+    let valuesI = values[i][nameInd];
+    for(let k = 0; k < valuesI.length; k++) {
+      let val = valuesI[k];
+      let countOpenBr = (val.match(new RegExp(`\\[`, 'g')) || []).length;
+      let countCloseBr = (val.match(new RegExp(`\\]`, 'g')) || []).length;
+      if(countOpenBr || countCloseBr) {
+        let ind = val.indexOf('[');
+        if(val[-1] != ']' || countOpenBr != 1 || countCloseBr != 1 || ind == 0) {
+          val = val.replace(new RegExp(`[\\[\\]]`, 'g'), replacementChar);
+          inconsist_replacing_elem(i, nameInd, k, findNewName(val, false), `The name at ${getAddress(i, nameInd)} includes square brackets, thus should be in the format "attribute[column title]".`)
+          return -1;
+        }
+        let att_col_NAME = values0[sheetCodeName][i][nameInd].split('[');
+        let columnTitle = att_col_NAME[1].slice(0, -1).trim();
+        let columnInd;
+        let found = false;
+        if(columnTitle.match(/^[A-Z]+$/)) {
+            columnInd = parseInt(columnTitle);
+            if(columnTypes[columnInd] != allColumnTypes.ATTRIBUTES) {
+              found = true;
+            }
+        } else {
+          for(let j = 0; j < colNumb; j++) {
+            if(columnTypes[j] == allColumnTypes.ATTRIBUTES && values[0][j].includes(columnTitle)) {
+              found = true;
+              break;
+            }
+          }
+        }
+        if(!found) {
+          inconsist_removing_elem(i, nameInd, k, `No column named "${columnTitle}" at ${getAddress(i, nameInd)} has attribute.`)
+          return -1;
+        }
+        att_col_NAME[0] = att_col_NAME[0].trim();
+        found = false;
+        for(let m = 0; m < nbLineBef; m++) {
+          for(let p = 0; p < values[m][columnInd].length; p++) {
+            if(values[m][columnInd][p] == att_col_NAME[0]) {
+              found = true;
+              break;
+            }
+          }
+        }
+        if(!found) {
+          inconsist_replacing_elem(i, nameInd, k, `The column named "${columnTitle}" at ${getAddress(i, nameInd)} doesn't have the attribute "${att_col_NAME[0]}".`)
+          return -1;
+        }
+        valuesI[k] = att_col_NAME[0] + (att_col_NAME[0].includes(" ")?" ":"") + "[" + columnTitle + "]";
+      }
+    }
   }
   for (let i = 1; i < nbLineBef; i++) {
     for (let j = 1; j < 4; j++) {
@@ -1549,6 +1607,66 @@ app.post('/execute', (req, res) => {
     delete response[0]["listBoxList"];
   }
   res.json(response);
+});
+
+function parseExpression(expr) {
+    // Replace '&&' with 'and' and '||' with 'or' to match JS syntax
+    expr = expr.replace(/&&/g, '&&').replace(/\|\|/g, '||');
+    const ast = acorn.parseExpressionAt(expr, 0);
+    return buildTree(ast);
+}
+
+function buildTree(node) {
+    if (node.type === 'LogicalExpression') { // Handles && and ||
+        const op = node.operator === '&&' ? '&&' : '||';
+        const root = new Node(op);
+        root.left = buildTree(node.left);
+        root.right = buildTree(node.right);
+        return root;
+    } else if (node.type === 'BinaryExpression') { // Handles comparisons like A == 1
+        return new Node(`${node.left.name} == ${node.right.value}`);
+    } else if (node.type === 'Identifier') {
+        return new Node(node.name);
+    } else if (node.type === 'Literal') {
+        return new Node(String(node.value));
+    } else {
+        throw new Error("Unsupported AST node.");
+    }
+}
+
+function findNecessarySubformulas(node) {
+    if (node.value === '&&') {
+        const left = findNecessarySubformulas(node.left);
+        const right = findNecessarySubformulas(node.right);
+        return left.concat(right);
+    } else if (node.value === '||') {
+        const left = findNecessarySubformulas(node.left);
+        const right = findNecessarySubformulas(node.right);
+        const common = left.filter(value => right.includes(value));
+        return common;
+    } else {
+        return [node.value];
+    }
+}
+
+
+app.post('/test', (req, res) => {
+
+
+
+  // Example usage:
+  const formula = "(A == 1) && (B == 2 || (C == 3) && (D == 4))";
+  // const formula = "(A == 1) && ((C == 3) && (B == 2) || (C == 3) && (D == 4))"
+  // const formula = "(A == 1) && (B == 2) || (C == 3) && (D == 4)"
+  // const formula = "(A == 1) && (B == 2 || (C == 3) && (D == 4))"
+  // const formula = "(A == 1) && (C == 3) || (C == 3) && (D == 4)"
+  const tree = parseExpression(formula);
+  const necessarySubformulas = findNecessarySubformulas(tree);
+
+  console.log("Necessary Subformulas:", necessarySubformulas);
+
+  
+  res.json("response");
 });
 
 app.listen(port, () => {

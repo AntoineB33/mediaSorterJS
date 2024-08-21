@@ -359,7 +359,7 @@ Private Sub Workbook_SheetChange(ByVal Sh As Object, ByVal Target As range)
         changes(i, 3) = cell.Value
         i = i + 1
     Next cell
-
+    
     CallJavaScriptFunctionAsync "handleChange", True, "changes", changes
 End Sub
 
