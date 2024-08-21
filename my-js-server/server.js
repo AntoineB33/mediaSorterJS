@@ -297,9 +297,10 @@ function check() {
 
   for (let i = 1; i < nbLineBef; i++) {
     data.push({
-      isNotFollowing: true,
+      isNotFollowing: [true],
       precedents: [],
-      follower: -1,
+      posteriors: [],
+      follower: [],
       follower_to_attrib: [],
       follower_with_delay: [],
       followed_with_delay: [],
@@ -341,8 +342,27 @@ function check() {
           let tree = parseExpression(val);
           let necessarySubformulas = findNecessarySubformulas(tree);
           for(let r = 0; r < necessarySubformulas.length; r++) {
-            if(necessarySubformulas[r]) {
-              
+            let countQuotes = (val.match(new RegExp(`"`, 'g')) || []).length;
+            if(necessarySubformulas[r][0] == 'a') {
+              if(necessarySubformulas[r][necessarySubformulas[r].length - 1] != '"' || countQuotes != 2) {
+                inconsist_removing_elem(i, j, k, `The condition at ${getAddress(i, j)} should be in the format a"name_of_the_row" .`);
+                return;
+              }
+              // get the name_of_the_row in a"name_of_the_row"
+              let name = necessarySubformulas[r].slice(2, -1);
+              let found = false;
+              for(let f = 1; f < nbLineBef; f++) {
+                if(values[f][nameInd].includes(name)) {
+                  data[i].precedents.push(f);
+                  data[f].posteriors.push(i);
+                  found = true;
+                  break;
+                }
+              }
+              if(!found) {
+                inconsist_removing_elem(i, j, k, `The name at ${getAddress(i, j)} is not found.`);
+                return;
+              }
             }
           }
         } else if (columnTypes[j] == allColumnTypes.ATTRIBUTES) {
@@ -363,8 +383,8 @@ function check() {
           }
         }
         if (values[0][j][k] == headerNames[allColumnNames.PERIODS]) {
-          for (let r = 0; r < attNames[j - 4].length; r++) {
-            if (attNames[j - 4][r] == val) {
+          for (let r = 0; r < attNames[j].length; r++) {
+            if (attNames[j][r] == val) {
               data[i][2].push(acc + r);
               attributes[acc + r]++;
               stop = true;
@@ -372,8 +392,8 @@ function check() {
             }
           }
           if (!stop) {
-            data[i][2].push(acc + attNames[j - 4].length);
-            attNames[j - 4].push(val);
+            data[i][2].push(acc + attNames[j].length);
+            attNames[j].push(val);
             attributes.push(1);
           }
         } else {
@@ -404,7 +424,7 @@ function check() {
         stop = false;
       }
     }
-    acc += attNames[j - 4].length;
+    acc += attNames[j].length;
   }
   for(let i = 1; i < nbLineBef; i++) {
     let valuesI = values[i][nameInd];
@@ -419,21 +439,15 @@ function check() {
           inconsist_replacing_elem(i, nameInd, k, findNewName(val, false), `The name at ${getAddress(i, nameInd)} includes square brackets, thus should be in the format "attribute[column title]".`)
           return -1;
         }
-        let att_col_NAME = values0[sheetCodeName][i][nameInd].split('[');
+        let att_col_NAME = valuesI[k].split('[');
         let columnTitle = att_col_NAME[1].slice(0, -1).trim();
         let columnInd;
         let found = false;
-        if(columnTitle.match(/^[A-Z]+$/)) {
-            columnInd = parseInt(columnTitle);
-            if(columnTypes[columnInd] != allColumnTypes.ATTRIBUTES) {
-              found = true;
-            }
-        } else {
-          for(let j = 0; j < colNumb; j++) {
-            if(columnTypes[j] == allColumnTypes.ATTRIBUTES && values[0][j].includes(columnTitle)) {
-              found = true;
-              break;
-            }
+        for(let j = 0; j < colNumb; j++) {
+          if(columnTypes[j] == allColumnTypes.ATTRIBUTES && values[0][j].includes(columnTitle)) {
+            columnInd = j;
+            found = true;
+            break;
           }
         }
         if(!found) {
@@ -442,9 +456,18 @@ function check() {
         }
         att_col_NAME[0] = att_col_NAME[0].trim();
         found = false;
-        for(let m = 0; m < nbLineBef; m++) {
-          for(let p = 0; p < values[m][columnInd].length; p++) {
-            if(values[m][columnInd][p] == att_col_NAME[0]) {
+        for(let m = 0; m < attNames[columnInd].length; m++) {
+          for(let key in attNames[columnInd][m]) {
+            if(key == att_col_NAME[0]) {
+              for(let r = 0; r < values.length; r++) {
+                for(let f = 0; f < data[r].attributes.length; f++) {
+                  if(data[r].attributes[f] == attNames[columnInd][m][key]) {
+                    for(let cond in data[i]) {
+                      data[r][cond].concat(data[i][cond]);
+                    }
+                  }
+                }
+              }
               found = true;
               break;
             }
