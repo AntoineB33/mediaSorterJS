@@ -1,3 +1,5 @@
+'xlwings vba edit
+
 Private Declare PtrSafe Function Sleep Lib "kernel32" (ByVal dwMilliseconds As Long) As Long
 Private Declare PtrSafe Sub GetLocalTime Lib "kernel32" (lpSystemTime As SYSTEMTIME)
 
@@ -163,9 +165,13 @@ Public Sub CheckHttpResponse()
                                         .Tag = ListSuggSt
                                         
                                         ' Set colors for each item
-                                        .ForeColor = RGB(oneListItem("color")("r"), _
+                                        Dim colorRGB As Long
+                                        colorRGB = RGB(oneListItem("color")("r"), _
                                                         oneListItem("color")("g"), _
                                                         oneListItem("color")("b"))
+                                        .BorderStyle = fmBorderStyleSingle
+                                        .BorderColor = colorRGB
+                                        .ForeColor = colorRGB
 
 
 
@@ -512,29 +518,28 @@ Public Sub CallJavaScriptFunctionAsync(ByVal funcName As String, ParamArray para
     http.send jsonRequest
 
 
-    
-    ' Wait and check if the acknowledgment file exists
-    Dim fileExists As Boolean
-    Dim attempts As Integer
-    attempts = 0
+    ' ' Wait and check if the acknowledgment file exists
+    ' Dim fileExists As Boolean
+    ' Dim attempts As Integer
+    ' attempts = 0
 
-    Do
-        attempts = attempts + 1
-        fileExists = LineExistsInFile("C:\\Users\\abarb\\Documents\\health\\news_underground\\mediaSorter\\programs\\excel_prog\\mediaSorter\\received.txt", timestamp)
+    ' Do
+    '     attempts = attempts + 1
+    '     fileExists = LineExistsInFile("C:\\Users\\abarb\\Documents\\health\\news_underground\\mediaSorter\\programs\\excel_prog\\mediaSorter\\received.txt", timestamp)
 
-        If fileExists Then
-            Exit Do
-        End If
+    '     If fileExists Then
+    '         Exit Do
+    '     End If
 
-        ' Wait for a short time before checking again
-        Application.Wait (Now + TimeValue("0:00:01"))
+    '     ' Wait for a short time before checking again
+    '     Application.Wait (Now + TimeValue("0:00:01"))
 
-        ' Optionally limit the number of attempts
-        If attempts > 10 Then
-            Debug.Print "connection error"
-            Exit Do
-        End If
-    Loop
+    '     ' Optionally limit the number of attempts
+    '     If attempts > 10 Then
+    '         Debug.Print "connection error"
+    '         Exit Do
+    '     End If
+    ' Loop
 
     
 
@@ -670,6 +675,8 @@ Private Sub Workbook_Open()
     ClearTextFile logFile
     Workbook_SheetActivate activeSheet
 End Sub
+
+
 
 
 

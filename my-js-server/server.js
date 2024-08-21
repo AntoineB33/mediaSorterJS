@@ -40,6 +40,7 @@ var child;
 var data;
 var headerNames;
 var nameInd;
+var headerColors;
 
 // [node.js]
 var response;
@@ -157,7 +158,7 @@ function handleChange(updates) {
     var column = update[1] - 1;  // Adjusting for zero-based index
     var value = update[2];
     values0[sheetCodeName][row][column] = value;
-    var splitValue = value;
+    var splitValue = [];
     if(value) {
       splitValue = value
           .split(";")
@@ -190,8 +191,70 @@ function handleChange(updates) {
     }
     nbLineBef--;
   }
-  check();
+  
+
+  // Label the columns "names" and "media"
+  headerNames = {};
+  let namesColor;
+  let alreadyLabelled;
+  let missingNamesNb = Object.values(allColumnNames).length;
+  resolved[sheetCodeName] = false;
+  for(let j = 0; j < values[0].length; j++) {
+    alreadyLabelled = "";
+    for(let k = 0; k < values[0][j].length; k++) {
+      let name = values[0][j][k];
+      if(Object.values(allColumnNames).find(item => item === name)) {
+        if(alreadyLabelled) {
+          inconsist_removing_elem(0, j, k, `Column ${getColumnTag(j)} labelled as "${alreadyLabelled}" and ${name}.`);
+          return;
+        }
+        if(headerNames[name] !== undefined) {
+          inconsist_removing_elem(0, j, k, `Column ${getColumnTag(j)} labelled as "${name}" already at column ${getColumnTag(headerNames[name])}.`);
+          return;
+        }
+        if(namesColor !== undefined && namesColor !== headerColors[j]) {
+          inconsist(0, j, `Column ${getColumnTag(j)} must have the same background color as the attributes.`, [namesColor], true);
+          return;
+        }
+        if(name == allColumnNames.NAMES) {
+          nameInd = j;
+        }
+        missingNamesNb--;
+        namesColor = headerColors[j];
+        alreadyLabelled = name;
+        headerNames[name] = j;
+      }
+    }
+  }
+  if(missingNamesNb) {
+    let suggs = Object.values(allColumnNames).filter((name) => headerNames[name] === undefined);
+    let lastCol = values[0].length;
+    let actions = [{action: Actions.Select, address: [0, lastCol]}];
+    suggs.forEach(sugg => {
+      actions.push({action: Actions.NewVal, address: [0, lastCol], newVal: sugg});
+      lastCol+=1;
+    });
+    response[0]["listBoxList"][msgType.ERROR].push({color: msgTypeColors[msgType.ERROR], msg: `Missing columns: ${suggs.join(", ")}.`, actions: actions});
+    return;
+  }
+  columnTypes = [];
+  let condColor;
+  for (let j = 0; j < headerColors.length; j++) {
+    if (headerColors[j] === namesColor) {
+      columnTypes.push(allColumnTypes.ATTRIBUTES);
+    } else if (headerColors[j] === null) {
+      columnTypes.push(null);
+    } else if (condColor === undefined || headerColors[j] === condColor) {
+      condColor = headerColors[j];
+      columnTypes.push(allColumnTypes.CONDITIONS);
+    } else {
+      inconsist(0, j, `Third background color at column ${j + 1} (must be only two, for the conditions and the attributes)`, [condColor], true);
+      return;
+    }
+  }
+
   values.splice(nbLineBef, nbLineBefBef - nbLineBef);
+  check();
   oldValues.splice(indOldValues, oldValues.length - 1 - indOldValues);
   oldValues.push(values);
   if(oldVersionsMaxNb < oldValues.length) {
@@ -1131,17 +1194,15 @@ function searching(r, d, f) {
 }
 
 function inconsist_removing_elem(i, j, k, message) {
-  values[i][j].splice(k, 1);
-  inconsist(i, j, [values[i][j].join("; ")], message);
+  inconsist(i, j, message, [values[i][j].filter((_, m) => m !== k)]);
 }
 
 function inconsist_replacing_elem(i, j, k, newElement, message) {
-  values[i][j][k] = newElement;
-  inconsist(i, j, [values[i][j].join("; ")], message);
+  inconsist(i, j, message, [values[i][j][k].map((item, m) => (m === k ? newElement : item))]);
 }
 
 function sugg(i, j) {
-  suggSet(i, j, [values[i][j].join("; ")]);
+  suggSet(i, j, [values[i][j]]);
 }
 
 function suggSet(i, j, sugg) {
@@ -1156,21 +1217,21 @@ function midToWhite(theMsgType = msgType.ERROR) {
   let newR = Math.floor((r + 255) / 2);
   let newG = Math.floor((g + 255) / 2);
   let newB = Math.floor((b + 255) / 2);
-  return RGB(newR, newG, newB);
+  return {r:newR, g:newG, b:newB};
 }
 
 function displayReference(row) {
   response[0]["listBoxList"][msgType.RELATIVES].push({color: msgTypeColors[msgType.RELATIVES], msg: "; ".join(values[r][0]), actions: [{action: Actions.Select, address: [row, 0]}]});
 }
 
-function inconsist(i, j, message, suggs, theAction = Actions.NewVal) {
+function inconsist(i, j, message, suggs, theAction = Actions.NewVal, updateColor = false) {
   response[0]["listBoxList"][msgType.ERROR].push({color: msgTypeColors[msgType.ERROR], msg: message, actions: [{action: Actions.Select, address: [i, j]}]});
   suggs.forEach(sugg => {
     let theNewVal = sugg;
     if (theAction == Actions.NewVal) {
       theNewVal = sugg.join("; ");
     }
-    response[0]["listBoxList"][msgType.ERROR].push({color: midToWhite(), msg: newVal, actions: [{action: Actions.Select, address: 0}, {action: theAction, address: 0, newVal: theNewVal}]});
+    response[0]["listBoxList"][msgType.ERROR].push({color: midToWhite(), msg: theNewVal, actions: [{action: Actions.Select, address: 0}, {action: theAction, address: 0, newVal: theNewVal}]});
   });
 }
 
@@ -1417,122 +1478,6 @@ function ctrlY() {
   }
 }
 
-function getColumnColor(body, headerColors) {
-  // Extract the header row
-  const headers = body.values[0];
-
-  // Find the index of the column titled "name"
-  const nameColumnIndex = headers.indexOf("name");
-
-  // If the column is found, get the corresponding color from headerColors
-  if (nameColumnIndex !== -1) {
-    return headerColors[nameColumnIndex];
-  } else {
-    // If the column is not found, return a default value or handle the error
-
-    return null;
-  }
-}
-
-function executeJS(body) {
-  response = [{"listBoxList": []}];
-  for (const key in msgType) {
-    response[0]["listBoxList"].push([]);
-  }
-  const funcName = body.functionName;
-  if (funcName === 'handleChange') {
-    handleChange(body.changes);
-  } else if (funcName === 'selectionChange') {
-    selectedCells[sheetCodeName] = body.selection;
-    handleSelectLinks();
-  } else if (funcName === 'chgSheet') {
-    values = values0[sheetCodeName];
-    sheetCodeName = body.sheetCodeName;
-
-    // Label the columns "names" and "media"
-    headerNames = {};
-    let namesColor;
-    let alreadyLabelled;
-    let missingNamesNb = Object.values(allColumnNames).length;
-    resolved[sheetCodeName] = false;
-    for(let j = 0; j < values[0].length; j++) {
-      alreadyLabelled = "";
-      if(values[0][j] == null) {
-        values[0][j] = []
-      } else {
-        values[0][j] = values[0][j].split(";").map((value) => value.trim()).filter((value) => value !== "");
-      }
-      for(let k = 0; k < values[0][j].length; k++) {
-        let name = values[0][j][k];
-        if(name in allColumnNames) {
-          if(alreadyLabelled) {
-            inconsist_removing_elem(0, j, k, `Column ${j} labelled as "${alreadyLabelled}" and ${name}.`);
-            return;
-          }
-          if(headerNames[name] !== undefined) {
-            inconsist_removing_elem(0, j, k, `Column ${j} labelled as "${name}" already at column ${headerNames[name]} .`);
-            return;
-          }
-          if(namesColor !== undefined && namesColor !== headerColors[j]) {
-            inconsist(0, j, `Column ${j} must have the same background color as the attributes.`, [namesColor], true);
-            return;
-          }
-          if(name == allColumnNames.NAMES) {
-            nameInd = j;
-          }
-          missingNamesNb--;
-          namesColor = headerColors[j];
-          alreadyLabelled = name;
-          headerNames[name] = alreadyLabelled;
-        }
-      }
-    }
-    if(missingNamesNb) {
-      let suggs = Object.values(allColumnNames).filter((name) => headerNames[name] === undefined);
-      let lastCol = values[0].length;
-      let actions = [{action: Actions.Select, address: [0, lastCol]}];
-      suggs.forEach(sugg => {
-        actions.push({action: Actions.NewVal, address: [0, lastCol], newVal: sugg});
-        lastCol+=1;
-      });
-      response[0]["listBoxList"][msgType.ERROR].push({color: msgTypeColors[msgType.ERROR], msg: `Missing columns: ${suggs.join(", ")}.`, actions: actions});
-      return;
-    }
-    columnTypes = [];
-    let condColor;
-    let headerColors = body.headerColors;
-    for (let j = 0; j < headerColors.length; j++) {
-      if (headerColors[j] === namesColor) {
-        columnTypes.push(allColumnTypes.ATTRIBUTES);
-      } else if (headerColors[j] === null) {
-        columnTypes.push(null);
-      } else if (condColor === undefined || headerColors[j] === condColor) {
-        condColor = headerColors[j];
-        columnTypes.push(allColumnTypes.CONDITIONS);
-      } else {
-        inconsist(0, j, `Third background color at column ${j + 1} (must be only two, for the conditions and the attributes)`, [condColor], true);
-        return;
-      }
-    }
-    check();
-  } else if (funcName == "dataGeneratorSub") {
-    dataGeneratorSub();
-  } else if (funcName == "renameSymbol") {
-    renameSymbol(body.oldValue, body.newValue);
-  } else if (funcName == "handleoldNameInputClick") {
-    handleoldNameInputClick();
-  } else if (funcName == "ctrlZ") {
-    ctrlZ();
-  } else if (funcName == "ctrlY") {
-    ctrlY();
-  } else if (funcName == "newSheet") {
-    sheetCodeName = body.sheetCodeName
-    values0[sheetCodeName] = body.values;
-    sorting[sheetCodeName] = false;
-    prevLine[sheetCodeName] = 0;
-  }
-}
-
 function addLineToFile(filePath, line) {
   // Add a newline character at the end of the line
   const lineWithNewline = line + '\n';
@@ -1561,9 +1506,38 @@ app.post('/execute', (req, res) => {
         // You can also send a success response back to the client here
     }
   });
-
-
-  executeJS(req.body);
+  
+  response = [{"listBoxList": []}];
+  for (const key in msgType) {
+    response[0]["listBoxList"].push([]);
+  }
+  let body = req.body;
+  const funcName = body.functionName;
+  if (funcName === 'handleChange') {
+    handleChange(body.changes);
+  } else if (funcName === 'selectionChange') {
+    selectedCells[sheetCodeName] = body.selection;
+    handleSelectLinks();
+  } else if (funcName === 'chgSheet') {
+    sheetCodeName = body.sheetCodeName;
+    headerColors = body.headerColors;
+    values = values0[sheetCodeName].map(r => r.map(c => c===null?[]:c.split(';').map(k => k.trim().toLowerCase()).filter(k => k)));
+    handleChange([]);
+  } else if (funcName == "dataGeneratorSub") {
+    dataGeneratorSub();
+  } else if (funcName == "renameSymbol") {
+    renameSymbol(body.oldValue, body.newValue);
+  } else if (funcName == "handleoldNameInputClick") {
+    handleoldNameInputClick();
+  } else if (funcName == "ctrlZ") {
+    ctrlZ();
+  } else if (funcName == "ctrlY") {
+    ctrlY();
+  } else if (funcName == "newSheet") {
+    values0[body.sheetCodeName] = body.values;
+    sorting[body.sheetCodeName] = false;
+    prevLine[body.sheetCodeName] = 0;
+  }
   let empty = true;
   for (const msgT in response[0]["listBoxList"]) {
     if(msgT.length) {

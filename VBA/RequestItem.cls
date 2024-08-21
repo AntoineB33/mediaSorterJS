@@ -1,3 +1,13 @@
+
+
+
+
+
+
+
+
+
+' Inside the RequestItem class module
 Public http As Object
 Public funcName As String
 Public sheetCodeName As String

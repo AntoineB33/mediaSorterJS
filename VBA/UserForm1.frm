@@ -1,3 +1,18 @@
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 Private Sub SortButton_Click()
     sheetVBA.Protect UserInterfaceOnly:=sorting(sheetCodeName)
     If sorting(sheetCodeName) Then
@@ -8,7 +23,7 @@ Private Sub SortButton_Click()
         ThisWorkbook.CallJavaScriptFunctionAsync "dataGeneratorSub", True
         updateButton.Visible = True
     End If
-    sorting(sheetCodeName) = not sorting(sheetCodeName)
+    sorting(sheetCodeName) = Not sorting(sheetCodeName)
 End Sub
 
 Private Sub updateButton_Click()
@@ -56,4 +71,5 @@ End Sub
 Private Sub UserForm_Click()
 
 End Sub
+
 

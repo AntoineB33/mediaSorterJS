@@ -1,4 +1,11 @@
-Public WithEvents http As WinHttp.WinHttpRequest
+
+
+
+
+
+
+
+
 
 Private Sub Class_Initialize()
     Set http = New WinHttp.WinHttpRequest
@@ -11,10 +18,10 @@ End Sub
 '     End With
 ' End Sub
 
-Public Sub SendAsyncRequest(URL As String, jsonData As String)
+Public Sub SendAsyncRequest(url As String, jsonData As String)
     With http
-        .Open "POST", URL, True
-        .SetRequestHeader "Content-Type", "application/json"
+        .Open "POST", url, True
+        .setRequestHeader "Content-Type", "application/json"
         .send jsonData
     End With
 End Sub
@@ -27,18 +34,18 @@ Private Sub http_OnResponseFinished()
     ' Iterate through the list of functions to call
     For Each functionCall In responseJson
         functionName = functionCall("functionName")
-        parameters = functionCall("parameters")
+        Parameters = functionCall("parameters")
         
         ' Call the VBA function with the parameters
-        Select Case UBound(parameters)
+        Select Case UBound(Parameters)
             Case -1
                 Application.Run functionName
             Case 0
-                Application.Run functionName, parameters(0)
+                Application.Run functionName, Parameters(0)
             Case 1
-                Application.Run functionName, parameters(0), parameters(1)
+                Application.Run functionName, Parameters(0), Parameters(1)
             Case 2
-                Application.Run functionName, parameters(0), parameters(1), parameters(2)
+                Application.Run functionName, Parameters(0), Parameters(1), Parameters(2)
             ' Add more cases as needed for more parameters
             Case Else
                 MsgBox "Too many parameters for function: " & functionName
@@ -50,5 +57,6 @@ Private Sub http_OnError(ByVal ErrorNumber As Long, ByVal ErrorDescription As St
     Application.OnTime Now + TimeValue("0:00:01"), "ThisWorkbook.TestAsyncHTTPRequest"
     'MsgBox "Error: " & ErrorNumber & " - " & ErrorDescription
 End Sub
+
 
 
