@@ -281,7 +281,7 @@ function checkQuotes(i, val) {
   return 1;
 }
 
-function checkBrack(i, k, val, withQuotes) {
+function checkBrack(i, k, val, withQuotes = true) {
   let countOpenBr = (val.match(new RegExp(`\\[`, 'g')) || []).length;
   let countCloseBr = (val.match(new RegExp(`\\]`, 'g')) || []).length;
   let refInd = -1;
@@ -414,131 +414,6 @@ function check() {
       }
     }
   }
-  for (let j = 0; j < colNumb; j++) {
-    accAttr[j] = acc;
-    for (let i = 1; i < nbLineBef; i++) {
-      for (let k = 0; k < values[i][j].length; i++) {
-        let val = values[i][j][k];
-        if (columnTypes[j] == allColumnTypes.CONDITIONS) {
-          if(k) {
-            inconsist_removing_elem(i, j, k, `The condition at ${getAddress(i, j)} shouldn't have ';'.`);
-            return;
-          }
-          let tree = parseExpression(val);
-          let necessarySubformulas = findNecessarySubformulas(tree);
-          for(let r = 0; r < necessarySubformulas.length; r++) {
-            if(necessarySubformulas[r][0] == 'a') {
-              necessarySubformulas[r] = necessarySubformulas[r].slice(1).split('"').map(s => s.trim());
-              let val;
-              let val2;
-              if(necessarySubformulas[r][1]) {
-                val = necessarySubformulas[r].slice(0,4).join('"');
-                val2 = necessarySubformulas[r].slice(4).join('"');
-              } else {
-                val = necessarySubformulas[r][0];
-                val2 = necessarySubformulas[r].slice(1).join('"');
-              }
-              let refInd_val = checkBrack(i, k, val, false);
-              if(refInd_val == -1) {
-                return;
-              }
-              if(refInd_val[0] == -1) {
-                inconsist_removing_elem(i, j, k, `attribute "${val}" at ${getAddress(i, j)} not found.`);
-                return;
-              }
-              let refInd_val2 = checkBrack(i, k, val2, false);
-              if(refInd_val2 == -1) {
-                return;
-              }
-              if(refInd_val2[0] == -1) {
-                for (let r = 1; r < values.length; r++) {
-                  for (let f = 0; f < values[r][nameInd].length; f++) {
-                    if ((r < i || f < k) && valuesI[k]==values[r][nameInd][k]) {
-                      inconsist_replacing_elem(i, nameInd, k, findNewName(valuesI[k]), `name "${valuesI[k]} at ${getAddress(i, j)} already at ${getAddress(r, nameInd)}`);
-                      return;
-                    }
-                  }
-                }
-              }
-
-
-
-
-
-
-
-
-              let oper = necessarySubformulas[r].split('"')[0].slice(1).split("[");
-              let cat = -1;
-              let att = oper[1];
-              if(oper.length == 2 && )
-              if(oper.length == 1) {
-                oper = oper[0];
-              } else if(oper.length == 2) {
-                att = att.slice(0, -1);
-                for(let key in attNames) {
-                  for(let m = 0; m < attNames[key].length; m++) {
-                    if(attNames[key][m] == att) {
-                      if(cat != -1) {
-                        inconsist_removing_elem(i, nameInd, k, `The attribute "${att}" at ${getAddress(i, nameInd)} exists in multiple columns.`);
-                        return;
-                      }
-                      cat = accAttr[key] + m;
-                      break;
-                    }
-                  }
-                }
-                if(cat == -1) {
-                  inconsist_removing_elem(i, nameInd, k, `The attribute "${att}" at ${getAddress(i, nameInd)} doesn't exist.`);
-                  return;
-                }
-              } else if(oper.length == 3) {
-                let colName = oper[2].slice(0, -2);
-                let columnInd = -1;
-                for(let v = 0; v < values[0].length; v++) {
-                  for(let w = 0; w < values[0][v].length; w++) {
-                    if(values[0][v][w].includes(colName)) {
-                      columnInd = v;
-                      break;
-                    }
-                  }
-                }
-                if(columnInd == -1) {
-                  inconsist_removing_elem(i, nameInd, k, `The column "${colName}" at ${getAddress(i, nameInd)} doesn't exist.`);
-                  return;
-                }
-                for(let m = 0; m < attNames[columnInd].length; m++) {
-                  if(attNames[columnInd][m] == att) {
-                    cat = accAttr[columnInd] + m;
-                    break;
-                  }
-                }
-                if(cat==-1) {
-                  inconsist_removing_elem(i, nameInd, k, `The attribute "${att}" at ${getAddress(i, nameInd)} doesn't exist in the column "${colName}".`);
-                  return;
-                }
-              }
-              // get the name_of_the_row in a"name_of_the_row"
-              let name = necessarySubformulas[r].slice(2, -1);
-              let found = false;
-              for(let f = 1; f < nbLineBef; f++) {
-                if(values[f][nameInd].includes(name)) {
-                  data[i].precedents.push(f);
-                  data[f].posteriors.push([i, oper, cat]);
-                  found = true;
-                  break;
-                }
-              }
-              if(!found) {
-                inconsist_removing_elem(i, j, k, `The name at ${getAddress(i, j)} is not found.`);
-                return;
-              }
-            }
-          }
-        }
-      }
-    }
-  }
   for(let i = 1; i < nbLineBef; i++) {
     let valuesI = values[i][nameInd];
     for(let k = 0; k < valuesI.length; k++) {
@@ -575,6 +450,63 @@ function check() {
           }
         }
         data[i] = undefined;
+      }
+    }
+  }
+  for (let j = 0; j < colNumb; j++) {
+    if (columnTypes[j] == allColumnTypes.CONDITIONS) {
+      for (let i = 1; i < nbLineBef; i++) {
+        for (let k = 0; k < values[i][j].length; i++) {
+          let val = values[i][j][k];
+          if(k) {
+            inconsist_removing_elem(i, j, k, `The condition at ${getAddress(i, j)} shouldn't have ';'.`);
+            return;
+          }
+          let tree = parseExpression(val);
+          let necessarySubformulas = findNecessarySubformulas(tree);
+          for(let r = 0; r < necessarySubformulas.length; r++) {
+            if(necessarySubformulas[r][0] == 'a') {
+              necessarySubformulas[r] = necessarySubformulas[r].slice(1).split('"').map(s => s.trim());
+              let val;
+              let val2;
+              if(necessarySubformulas[r][1]) {
+                val = necessarySubformulas[r].slice(0,4).join('"');
+                val2 = necessarySubformulas[r].slice(4).join('"');
+              } else {
+                val = necessarySubformulas[r][0];
+                val2 = necessarySubformulas[r].slice(1).join('"');
+              }
+              let refInd_val = checkBrack(i, k, val);
+              if(refInd_val == -1) {
+                return;
+              }
+              if(refInd_val[0] == -1) {
+                inconsist_removing_elem(i, j, k, `attribute "${val}" at ${getAddress(i, j)} not found.`);
+                return;
+              }
+              let refInd_val2 = checkBrack(i, k, val2);
+              if(refInd_val2 == -1) {
+                return;
+              }
+              if(refInd_val2[0] == -1) {
+                found = false;
+                for (let r = 1; r < values.length; r++) {
+                  for (let f = 0; f < values[r][nameInd].length; f++) {
+                    if (refInd_val2[1]==values[r][nameInd][k]) {
+                      data[i].precedents.push(r);
+                      data[r].posteriors.push(i);
+                      found = true;
+                      break;
+                    }
+                  }
+                  if(found) {
+                    break;
+                  }
+                }
+              }
+            }
+          }
+        }
       }
     }
   }
