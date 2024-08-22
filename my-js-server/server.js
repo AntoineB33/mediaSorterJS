@@ -41,8 +41,10 @@ var columnTypes;
 var child;
 var data;
 var headerNames;
+var nameSt = "names";
 var nameInd;
-var mediaInd;
+var mediaSt = "media";
+var mediaInd = -1;
 var headerColors;
 var attNames;
 
@@ -53,11 +55,6 @@ var response;
 const allColumnTypes = {
   CONDITIONS: 0,
   ATTRIBUTES: 1
-};
-
-const allColumnNames = {
-  NAMES: "names",
-  MEDIA: "media"
 };
 
 const msgType = {
@@ -164,98 +161,74 @@ function handleSelectLinks() {
 
 function handleChange(updates) {
   var splitValue = [];
-  updates.forEach(function(update) {
+  for(let update in updates) {
     var row = update[0] - 1;  // Adjusting for zero-based index
     var column = update[1] - 1;  // Adjusting for zero-based index
     var value = update[2];
-    values0[sheetCodeName][row][column] = value;
     if(value) {
       while(headerColors.length <= j) {
         headerColors.push(null);
         columnTypes.push(null);
       }
-      splitValue = (row == 0 || columnTypes[j] == allColumnTypes.ATTRIBUTES?
-            value.split(";"):
-            [value])
-          .map(v => v.trim().toLowerCase())
-          .filter(e => e !== "");
-      if(row == 0) {
-        for(let k = 0; k < splitValue.length; k++) {
-          if(values[0][j][k].match(/^[A-Z]+$/)) {
-            inconsist(0, j, `Column name at ${getAddress(0, column)} is only upper case letters.`, [findNewName(values[0][column][k])]);
-            return;
-          }
-        }
-      }
+      splitValue = value
+        .split(";")
+        .map(v => v.trim().toLowerCase())
+        .filter(e => e !== "");
     }
     // Expand the matrix rows if needed
     while (values.length <= row) {
       values.push([]);
+      values0.push([]);
     }
     // Expand the matrix columns if needed
     for (let i = 0; i < values.length; i++) {
       while (values[i].length <= column) {
         values[i].push([]);
+        values0[i].push([]);
       }
     }
     values[row][column] = splitValue;
-  });
-
-  nbLineBef = values.length;
-  
-  const nbLineBefBef = nbLineBef;
-  for (let i = nbLineBef - 1; i > 0; i--) {
-    if (values[i].some(v => v.length != 0)) {
-      break;
-    }
-    nbLineBef--;
+    values0[sheetCodeName][row][column] = value;
   }
   
 
   // Label the columns "names" and "media"
   headerNames = {};
   let namesColor;
-  let alreadyLabelled;
-  let missingNamesNb = Object.values(allColumnNames).length;
   resolved[sheetCodeName] = false;
-  for(let j = 0; j < values[0].length; j++) {
-    alreadyLabelled = "";
+  nameInd = -1;
+  mediaInd = -1;
+  for(let j = 0; j < values0[0].length; j++) {
     for(let k = 0; k < values[0][j].length; k++) {
       let name = values[0][j][k];
-      if(Object.values(allColumnNames).find(item => item === name)) {
-        if(alreadyLabelled) {
-          inconsist_removing_elem(0, j, k, `Column ${getColumnTag(j)} labelled as "${alreadyLabelled}" and ${name}.`);
-          return;
+      let alreadyInd = [];
+      if(name == nameSt) {
+        if(nameInd != -1) {
+          alreadyInd = [nameSt, nameInd];
         }
-        if(headerNames[name] !== undefined) {
-          inconsist_removing_elem(0, j, k, `Column ${getColumnTag(j)} labelled as "${name}" already at column ${getColumnTag(headerNames[name])}.`);
-          return;
+        nameInd = j;
+      } else if(name == mediaSt) {
+        if(mediaInd != -1) {
+          alreadyInd = [mediaSt, mediaInd];
         }
-        if(namesColor !== undefined && namesColor !== headerColors[j]) {
-          inconsist(0, j, `Column ${getColumnTag(j)} must have the same background color as the attributes.`, [namesColor], true);
-          return;
-        }
-        if(name == allColumnNames.NAMES) {
-          nameInd = j;
-        } else if(name == allColumnNames.MEDIA) {
-          mediaInd = j;
-        }
-        missingNamesNb--;
-        namesColor = headerColors[j];
-        alreadyLabelled = name;
-        headerNames[name] = j;
+        mediaInd = j;
+      }
+      if(alreadyInd) {
+        inconsist_removing_elem(0, j, k, `Column ${getColumnTag(j)} labelled as "${alreadyInd[0]}" already at column ${getColumnTag(alreadyInd[1])}.`);
+        return;
       }
     }
   }
-  if(missingNamesNb) {
-    let suggs = Object.values(allColumnNames).filter((name) => headerNames[name] === undefined);
-    let lastCol = values[0].length;
-    let actions = [{action: Actions.Select, address: [0, lastCol]}];
-    suggs.forEach(sugg => {
-      actions.push({action: Actions.NewVal, address: [0, lastCol], newVal: sugg});
-      lastCol+=1;
-    });
-    response[0]["listBoxList"][msgType.ERROR].push({color: msgTypeColors[msgType.ERROR], msg: `Missing columns: ${suggs.join(", ")}.`, actions: actions});
+  if(nameInd == -1) {
+    inconsist(0, values[0].length, `Missing columns: ${suggs.join(", ")}.`, [nameSt]);
+    return;
+  }
+  if(nameInd == mediaInd) {
+    inconsist(0, j, `Column ${getColumnTag(nameInd)} labelled as "${nameSt}" and "${mediaSt}".`, ['']);
+    return;
+  }
+  if(mediaInd != -1 && namesColor !== headerColors[mediaInd]) {
+    inconsist(0, mediaInd, `Column ${getColumnTag(mediaInd)} must have the same background color as the attributes.`, [namesColor], Actions.NewBgCol);
     return;
   }
   columnTypes = [];
@@ -276,6 +249,16 @@ function handleChange(updates) {
     }
   }
 
+
+
+  nbLineBef = values.length;
+  const nbLineBefBef = nbLineBef;
+  for (let i = nbLineBef - 1; i > 0; i--) {
+    if (values[i].some(v => v.length != 0)) {
+      break;
+    }
+    nbLineBef--;
+  }
   values.splice(nbLineBef, nbLineBefBef - nbLineBef);
   check();
   oldValues.splice(indOldValues, oldValues.length - 1 - indOldValues);
@@ -295,6 +278,7 @@ function checkQuotes(i, val) {
     inconsist_removing_elem(i, nameInd, 0, `The condition at ${getAddress(i, nameInd)} includes square brackets, thus should be in the format ""attribute"["column title"]".`)
     return -1;
   }
+  return 1;
 }
 
 function checkBrack(i, k, val, withQuotes) {
@@ -345,7 +329,7 @@ function checkBrack(i, k, val, withQuotes) {
       return -1;
     }
     let quotes = withQuotes?'"':'';
-    return [refInd, quotes + att_col_NAME[0] + quotes + (att_col_NAME[0].includes(" ")?" ":"") + "[" + quotes + columnTitle + quotes + "]"];
+    val = quotes + att_col_NAME[0] + quotes + (att_col_NAME[0].includes(" ")?" ":"") + "[" + quotes + columnTitle + quotes + "]";
   } else {
     for(let key in attNames) {
       for(let m = 0; m < attNames[key].length; m++) {
@@ -359,8 +343,8 @@ function checkBrack(i, k, val, withQuotes) {
         }
       }
     }
-    return [refInd, val];
   }
+  return [refInd, val];
 }
 
 function check() {
@@ -382,9 +366,8 @@ function check() {
       attributes:[],
       other_conditions:[],
     });
-    let cellList = values[i][nameInd];
     // check if a non-empty row has no name
-    if(!cellList.length) {
+    if(!values[i][nameInd].length) {
       for (let j = 0; j < values[i].length; j++) {
         if (values[i][j].length !== 0) {
           inconsist(i, nameInd, `missing name at ${getAddress(i, nameInd)}`, [[findNewName("")]]);
@@ -400,20 +383,91 @@ function check() {
   let acc = 0;
   let accAttr = {};
   for (let j = 0; j < colNumb; j++) {
+    let colTitle = values[0][j].split(";");
+    for(let k = 0; k < colTitle.length; k++) {
+      if(colTitle[k].match(/^[A-Z]+$/)) {
+        inconsist(0, j, `Column name at ${getAddress(0, j)} is only upper case letters.`, [findNewName(colTitle[k])]);
+        return;
+      }
+    }
+    if (columnTypes[j] == allColumnTypes.ATTRIBUTES && j!=nameInd) {
+      accAttr[j] = acc;
+      for (let i = 1; i < nbLineBef; i++) {
+        for (let k = 0; k < values[i][j].length; i++) {
+          let val = values[i][j][k];
+          let attInd = attNames[j].length;
+          for(let r = 0; r < attInd; r++) {
+            if(attNames[j][r] == val) {
+              attInd = r;
+              break;
+            }
+          }
+          if(attInd == attNames[j].length) {
+            attNames[j].push(val);
+            attributes.push(0);
+            attInd += accAttr[j];
+            acc+=1;
+          }
+          data[i].attributes.push(attInd);
+          attributes[attInd].push(1);
+        }
+      }
+    }
+  }
+  for (let j = 0; j < colNumb; j++) {
     accAttr[j] = acc;
     for (let i = 1; i < nbLineBef; i++) {
-      for (let k = 1; k < values[i][j].length; i++) {
+      for (let k = 0; k < values[i][j].length; i++) {
         let val = values[i][j][k];
         if (columnTypes[j] == allColumnTypes.CONDITIONS) {
+          if(k) {
+            inconsist_removing_elem(i, j, k, `The condition at ${getAddress(i, j)} shouldn't have ';'.`);
+            return;
+          }
           let tree = parseExpression(val);
           let necessarySubformulas = findNecessarySubformulas(tree);
           for(let r = 0; r < necessarySubformulas.length; r++) {
-            let countQuotes = (val.match(new RegExp(`"`, 'g')) || []).length;
             if(necessarySubformulas[r][0] == 'a') {
-              if(necessarySubformulas[r][necessarySubformulas[r].length - 1] != '"' || countQuotes != 2) {
-                inconsist_removing_elem(i, j, k, `The condition at ${getAddress(i, j)} should be in the format a"name_of_the_row" .`);
+              necessarySubformulas[r] = necessarySubformulas[r].slice(1).split('"').map(s => s.trim());
+              let val;
+              let val2;
+              if(necessarySubformulas[r][1]) {
+                val = necessarySubformulas[r].slice(0,4).join('"');
+                val2 = necessarySubformulas[r].slice(4).join('"');
+              } else {
+                val = necessarySubformulas[r][0];
+                val2 = necessarySubformulas[r].slice(1).join('"');
+              }
+              let refInd_val = checkBrack(i, k, val, false);
+              if(refInd_val == -1) {
                 return;
               }
+              if(refInd_val[0] == -1) {
+                inconsist_removing_elem(i, j, k, `attribute "${val}" at ${getAddress(i, j)} not found.`);
+                return;
+              }
+              let refInd_val2 = checkBrack(i, k, val2, false);
+              if(refInd_val2 == -1) {
+                return;
+              }
+              if(refInd_val2[0] == -1) {
+                for (let r = 1; r < values.length; r++) {
+                  for (let f = 0; f < values[r][nameInd].length; f++) {
+                    if ((r < i || f < k) && valuesI[k]==values[r][nameInd][k]) {
+                      inconsist_replacing_elem(i, nameInd, k, findNewName(valuesI[k]), `name "${valuesI[k]} at ${getAddress(i, j)} already at ${getAddress(r, nameInd)}`);
+                      return;
+                    }
+                  }
+                }
+              }
+
+
+
+
+
+
+
+
               let oper = necessarySubformulas[r].split('"')[0].slice(1).split("[");
               let cat = -1;
               let att = oper[1];
@@ -481,22 +535,6 @@ function check() {
               }
             }
           }
-        } else if (columnTypes[j] == allColumnTypes.ATTRIBUTES) {
-          let attInd = attNames[j].length;
-          for(let r = 0; r < attInd; r++) {
-            if(attNames[j][r] == val) {
-              attInd = r;
-              break;
-            }
-          }
-          if(attInd == attNames[j].length) {
-            attNames[j].push(val);
-            attributes.push(0);
-            attInd += accAttr[j];
-            acc+=1;
-          }
-          data[i].attributes.push(attInd);
-          attributes[attInd].push(1);
         }
       }
     }
@@ -512,20 +550,20 @@ function check() {
       valuesI[k] = refInd_val[1];
       if(refInd_val[0] == -1) {
         // check if the name is already used
-        for (let k = 0; k < cellList.length; k++) {
-          for (let r = 1; r <= i; r++) {
-            for (let f = 0; f < values[r][nameInd].length; f++) {
-              if ((r < i || f < k) && cellList[k]==values[r][nameInd][k]) {
-                inconsist_replacing_elem(i, nameInd, k, findNewName(cellList[k]), `name "${cellList[k]} at ${getAddress(i, j)} already at ${getAddress(r, nameInd)}`);
-                return;
-              }
+        for (let r = 1; r <= i; r++) {
+          for (let f = 0; f < values[r][nameInd].length; f++) {
+            if ((r < i || f < k) && valuesI[k]==values[r][nameInd][k]) {
+              inconsist_replacing_elem(i, nameInd, k, findNewName(valuesI[k]), `name "${valuesI[k]} at ${getAddress(i, j)} already at ${getAddress(r, nameInd)}`);
+              return;
             }
           }
         }
       } else {
-        if(values[i][mediaInd]) {
-          inconsist_removing_elem(i, nameInd, k, `there is a medium at "${cellList[k]} although the row references an attribute`);
-          return;
+        for(let key in attNames) {
+          if(values[i][key]) {
+            inconsist_removing_elem(i, nameInd, k, `there is an attribute at "${cellList[k]} although the row references an attribute`);
+            return;
+          }
         }
         for(let r = 0; r < values.length; r++) {
           for(let f = 0; f < data[r].attributes.length; f++) {
@@ -536,8 +574,8 @@ function check() {
             }
           }
         }
+        data[i] = undefined;
       }
-      data[i] = undefined;
     }
   }
 
@@ -1374,7 +1412,7 @@ function displayReference(row) {
   response[0]["listBoxList"][msgType.RELATIVES].push({color: msgTypeColors[msgType.RELATIVES], msg: "; ".join(values[r][0]), actions: [{action: Actions.Select, address: [row, 0]}]});
 }
 
-function inconsist(i, j, message, suggs, theAction = Actions.NewVal, updateColor = false) {
+function inconsist(i, j, message, suggs, theAction = Actions.NewVal) {
   response[0]["listBoxList"][msgType.ERROR].push({color: msgTypeColors[msgType.ERROR], msg: message, actions: [{action: Actions.Select, address: [i, j]}]});
   suggs.forEach(sugg => {
     let theNewVal = sugg;
