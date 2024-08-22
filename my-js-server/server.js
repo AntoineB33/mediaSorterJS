@@ -129,9 +129,6 @@ function handleSelectLinks() {
     }
   } else {
     for(let k = 0; k < values[row][column].length; k++) {
-      if(isTip(row, column, k) == -1) {
-        return -1;
-      }
       if(column < 4) {
         for(let r = 1; r < values.length; r++) {
           for(let f = 0; f < values[r][0].length; f++) {
@@ -291,6 +288,7 @@ function getAddress(i, j) {
 
 function check() {
   resolved[sheetCodeName] = false;
+  let found;
   
   data = [undefined];
   var r;
@@ -334,7 +332,9 @@ function check() {
   stop = false;
   attributes = [];
   let acc = 0;
+  let accAttr = {};
   for (let j = 0; j < colNumb; j++) {
+    accAttr[j] = acc;
     for (let i = 1; i < nbLineBef; i++) {
       for (let k = 1; k < values[i][j].length; i++) {
         let val = values[i][j][k];
@@ -348,13 +348,63 @@ function check() {
                 inconsist_removing_elem(i, j, k, `The condition at ${getAddress(i, j)} should be in the format a"name_of_the_row" .`);
                 return;
               }
+              let oper = necessarySubformulas[r].split('"')[0].slice(1).split("[");
+              let cat = -1;
+              let att = oper[1];
+              if(oper.length == 2 && )
+              if(oper.length == 1) {
+                oper = oper[0];
+              } else if(oper.length == 2) {
+                att = att.slice(0, -1);
+                for(let key in attNames) {
+                  for(let m = 0; m < attNames[key].length; m++) {
+                    if(attNames[key][m] == att) {
+                      if(cat != -1) {
+                        inconsist_removing_elem(i, nameInd, k, `The attribute "${att}" at ${getAddress(i, nameInd)} exists in multiple columns.`);
+                        return;
+                      }
+                      cat = accAttr[key] + m;
+                      break;
+                    }
+                  }
+                }
+                if(cat == -1) {
+                  inconsist_removing_elem(i, nameInd, k, `The attribute "${att}" at ${getAddress(i, nameInd)} doesn't exist.`);
+                  return;
+                }
+              } else if(oper.length == 3) {
+                let colName = oper[2].slice(0, -2);
+                let columnInd = -1;
+                for(let v = 0; v < values[0].length; v++) {
+                  for(let w = 0; w < values[0][v].length; w++) {
+                    if(values[0][v][w].includes(colName)) {
+                      columnInd = v;
+                      break;
+                    }
+                  }
+                }
+                if(columnInd == -1) {
+                  inconsist_removing_elem(i, nameInd, k, `The column "${colName}" at ${getAddress(i, nameInd)} doesn't exist.`);
+                  return;
+                }
+                for(let m = 0; m < attNames[columnInd].length; m++) {
+                  if(attNames[columnInd][m] == att) {
+                    cat = accAttr[columnInd] + m;
+                    break;
+                  }
+                }
+                if(cat==-1) {
+                  inconsist_removing_elem(i, nameInd, k, `The attribute "${att}" at ${getAddress(i, nameInd)} doesn't exist in the column "${colName}".`);
+                  return;
+                }
+              }
               // get the name_of_the_row in a"name_of_the_row"
               let name = necessarySubformulas[r].slice(2, -1);
               let found = false;
               for(let f = 1; f < nbLineBef; f++) {
                 if(values[f][nameInd].includes(name)) {
                   data[i].precedents.push(f);
-                  data[f].posteriors.push(i);
+                  data[f].posteriors.push([i, oper, cat]);
                   found = true;
                   break;
                 }
@@ -366,65 +416,24 @@ function check() {
             }
           }
         } else if (columnTypes[j] == allColumnTypes.ATTRIBUTES) {
-          for(let r = 0; r < attNames[j].length; r++) {
+          let attInd = attNames[j].length;
+          for(let r = 0; r < attInd; r++) {
             if(attNames[j][r] == val) {
-
-            }
-          }
-          data[i][allColumnTypes.ATTRIBUTES]
-        }
-      }
-      for (let k = 0; k < values[i][j].length; k++) {
-        val = values[i][j][k].toLowerCase();
-        for (let r = 1; r < nbLineBef; r++) {
-          for (let f = 0; f < values[r][nameInd].length; f++) {
-            if (val==values[i][nameInd][k].toLowerCase()) {
-            }
-          }
-        }
-        if (values[0][j][k] == headerNames[allColumnNames.PERIODS]) {
-          for (let r = 0; r < attNames[j].length; r++) {
-            if (attNames[j][r] == val) {
-              data[i][2].push(acc + r);
-              attributes[acc + r]++;
-              stop = true;
+              attInd = r;
               break;
             }
           }
-          if (!stop) {
-            data[i][2].push(acc + attNames[j].length);
+          if(attInd == attNames[j].length) {
             attNames[j].push(val);
-            attributes.push(1);
+            attributes.push(0);
+            attInd += accAttr[j];
+            acc+=1;
           }
-        } else {
-          for (let r = 1; r < nbLineBef; r++) {
-            for (let f = 0; f < values[r][0].length; f++) {
-              if (!searching(r, 0, f)) {
-                continue;
-              }
-              if (found(context, r, i, j, k) == -1) {
-                return -1;
-              }
-              if(periods) {
-                console.log(`1periods : ${periods[0][0]}`)
-              }
-              perInt[i].push(perRef[r]);
-              stop = true;
-              break;
-            }
-            if (stop) {
-              break;
-            }
-          }
-          if (!stop) {
-            suggRef(context, i, j, k);
-            return -1;
-          }
+          data[i].attributes.push(attInd);
+          attributes[attInd].push(1);
         }
-        stop = false;
       }
     }
-    acc += attNames[j].length;
   }
   for(let i = 1; i < nbLineBef; i++) {
     let valuesI = values[i][nameInd];
@@ -457,20 +466,19 @@ function check() {
         att_col_NAME[0] = att_col_NAME[0].trim();
         found = false;
         for(let m = 0; m < attNames[columnInd].length; m++) {
-          for(let key in attNames[columnInd][m]) {
-            if(key == att_col_NAME[0]) {
-              for(let r = 0; r < values.length; r++) {
-                for(let f = 0; f < data[r].attributes.length; f++) {
-                  if(data[r].attributes[f] == attNames[columnInd][m][key]) {
-                    for(let cond in data[i]) {
-                      data[r][cond].concat(data[i][cond]);
-                    }
+          if(attNames[columnInd][m] == att_col_NAME[0]) {
+            for(let r = 0; r < values.length; r++) {
+              for(let f = 0; f < data[r].attributes.length; f++) {
+                if(data[r].attributes[f] == accAttr[columnInd] + m) {
+                  for(let cond in data[i]) {
+                    data[r][cond].concat(data[i][cond]);
                   }
                 }
               }
-              found = true;
-              break;
             }
+            data[i] = undefined;
+            found = true;
+            break;
           }
         }
         if(!found) {
@@ -478,15 +486,49 @@ function check() {
           return -1;
         }
         valuesI[k] = att_col_NAME[0] + (att_col_NAME[0].includes(" ")?" ":"") + "[" + columnTitle + "]";
+      } else {
+        found = false;
+        for(let key in attNames) {
+          for(let m = 0; m < attNames[key].length; m++) {
+            if(attNames[key][m] == att_col_NAME[0]) {
+              if(found) {
+                inconsist_replacing_elem(i, nameInd, k, findNewName(val, false), `The attribute at ${getAddress(i, nameInd)} exists in multiple columns.`);
+                return -1;
+              }
+              for(let r = 0; r < values.length; r++) {
+                for(let f = 0; f < data[r].attributes.length; f++) {
+                  if(data[r].attributes[f] == accAttr[key] + m) {
+                    for(let cond in data[i]) {
+                      data[r][cond].concat(data[i][cond]);
+                    }
+                  }
+                }
+              }
+              data[i] = undefined;
+              found = true;
+              break;
+            }
+          }
+        }
       }
     }
   }
+
+
+
+
+
+
+
+
+
+
+
+
+
   for (let i = 1; i < nbLineBef; i++) {
     for (let j = 1; j < 4; j++) {
       for (let k = 0; k < values[i][j].length; k++) {
-        if(isTip(i, j, k)) {
-          return -1;
-        }
 
         //if [category]name is in the follow column
         let isCatF = 0;
