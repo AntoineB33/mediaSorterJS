@@ -42,6 +42,7 @@ var child;
 var data;
 var headerNames;
 var nameInd;
+var mediaInd;
 var headerColors;
 var attNames;
 
@@ -236,6 +237,8 @@ function handleChange(updates) {
         }
         if(name == allColumnNames.NAMES) {
           nameInd = j;
+        } else if(name == allColumnNames.MEDIA) {
+          mediaInd = j;
         }
         missingNamesNb--;
         namesColor = headerColors[j];
@@ -286,6 +289,80 @@ function getAddress(i, j) {
   return getColumnTag(j) + ":" + (i + 1);
 }
 
+function checkQuotes(i, val) {
+  let countQuot = (val.match(new RegExp(`"`, 'g')) || []).length;
+  if(countQuot != 2 || columnTitle[0] != '"' || columnTitle[columnTitle.length - 1] != '"') {
+    inconsist_removing_elem(i, nameInd, 0, `The condition at ${getAddress(i, nameInd)} includes square brackets, thus should be in the format ""attribute"["column title"]".`)
+    return -1;
+  }
+}
+
+function checkBrack(i, k, val, withQuotes) {
+  let countOpenBr = (val.match(new RegExp(`\\[`, 'g')) || []).length;
+  let countCloseBr = (val.match(new RegExp(`\\]`, 'g')) || []).length;
+  let refInd = -1;
+  if(countOpenBr || countCloseBr) {
+    let ind = val.indexOf('[');
+    if(val[-1] != ']' || countOpenBr != 1 || countCloseBr != 1 || ind == 0) {
+      val = val.replace(new RegExp(`[\\[\\]]`, 'g'), replacementChar);
+      inconsist_removing_elem(i, nameInd, k, `The name at ${getAddress(i, nameInd)} includes square brackets, thus should be in the format "attribute[column title]".`)
+      return -1;
+    }
+    let att_col_NAME = values[i][nameInd][k].split('[');
+    let columnTitle = att_col_NAME[1].slice(0, -1).trim();
+    if(withQuotes) {
+      if(checkQuotes(i, columnTitle) == -1) {
+        return -1;
+      }
+      columnTitle = columnTitle.slice(1, -1);
+    }
+    let columnInd = -1;
+    for(let j = 0; j < colNumb; j++) {
+      if(columnTypes[j] == allColumnTypes.ATTRIBUTES && values[0][j].includes(columnTitle)) {
+        columnInd = j;
+        break;
+      }
+    }
+    if(columnInd == -1) {
+      inconsist_removing_elem(i, nameInd, k, `No column named "${columnTitle}" at ${getAddress(i, nameInd)} has attribute.`)
+      return -1;
+    }
+    att_col_NAME[0] = att_col_NAME[0].trim();
+    if(withQuotes) {
+      if(checkQuotes(i, att_col_NAME[0]) == -1) {
+        return -1;
+      }
+      att_col_NAME[0] = att_col_NAME[0].slice(1, -1);
+    }
+    for(let m = 0; m < attNames[columnInd].length; m++) {
+      if(attNames[columnInd][m] == att_col_NAME[0]) {
+        refInd = m;
+        break;
+      }
+    }
+    if(refInd == -1) {
+      inconsist_replacing_elem(i, nameInd, k, `The column named "${columnTitle}" at ${getAddress(i, nameInd)} doesn't have the attribute "${att_col_NAME[0]}".`)
+      return -1;
+    }
+    let quotes = withQuotes?'"':'';
+    return [refInd, quotes + att_col_NAME[0] + quotes + (att_col_NAME[0].includes(" ")?" ":"") + "[" + quotes + columnTitle + quotes + "]"];
+  } else {
+    for(let key in attNames) {
+      for(let m = 0; m < attNames[key].length; m++) {
+        if(attNames[key][m] == att_col_NAME[0]) {
+          if(refInd != -1) {
+            inconsist_replacing_elem(i, nameInd, k, findNewName(val, false), `The attribute at ${getAddress(i, nameInd)} exists in multiple columns.`);
+            return -1;
+          }
+          refInd = m;
+          break;
+        }
+      }
+    }
+    return [refInd, val];
+  }
+}
+
 function check() {
   resolved[sheetCodeName] = false;
   let found;
@@ -316,17 +393,6 @@ function check() {
       }
       data[i] = undefined;
       continue;
-    }
-    // check if the name is already used
-    for (let k = 0; k < cellList.length; k++) {
-      for (let r = 1; r <= i; r++) {
-        for (let f = 0; f < values[r][nameInd].length; f++) {
-          if ((r < i || f < k) && cellList[k]==values[r][nameInd][k]) {
-            inconsist_replacing_elem(i, nameInd, k, findNewName(cellList[k]), `name "${cellList[k]} at ${getAddress(i, j)} already at ${getAddress(r, nameInd)}`);
-            return;
-          }
-        }
-      }
     }
   }
   stop = false;
@@ -439,78 +505,39 @@ function check() {
     let valuesI = values[i][nameInd];
     for(let k = 0; k < valuesI.length; k++) {
       let val = valuesI[k];
-      let countOpenBr = (val.match(new RegExp(`\\[`, 'g')) || []).length;
-      let countCloseBr = (val.match(new RegExp(`\\]`, 'g')) || []).length;
-      if(countOpenBr || countCloseBr) {
-        let ind = val.indexOf('[');
-        if(val[-1] != ']' || countOpenBr != 1 || countCloseBr != 1 || ind == 0) {
-          val = val.replace(new RegExp(`[\\[\\]]`, 'g'), replacementChar);
-          inconsist_replacing_elem(i, nameInd, k, findNewName(val, false), `The name at ${getAddress(i, nameInd)} includes square brackets, thus should be in the format "attribute[column title]".`)
-          return -1;
-        }
-        let att_col_NAME = valuesI[k].split('[');
-        let columnTitle = att_col_NAME[1].slice(0, -1).trim();
-        let columnInd;
-        let found = false;
-        for(let j = 0; j < colNumb; j++) {
-          if(columnTypes[j] == allColumnTypes.ATTRIBUTES && values[0][j].includes(columnTitle)) {
-            columnInd = j;
-            found = true;
-            break;
-          }
-        }
-        if(!found) {
-          inconsist_removing_elem(i, nameInd, k, `No column named "${columnTitle}" at ${getAddress(i, nameInd)} has attribute.`)
-          return -1;
-        }
-        att_col_NAME[0] = att_col_NAME[0].trim();
-        found = false;
-        for(let m = 0; m < attNames[columnInd].length; m++) {
-          if(attNames[columnInd][m] == att_col_NAME[0]) {
-            for(let r = 0; r < values.length; r++) {
-              for(let f = 0; f < data[r].attributes.length; f++) {
-                if(data[r].attributes[f] == accAttr[columnInd] + m) {
-                  for(let cond in data[i]) {
-                    data[r][cond].concat(data[i][cond]);
-                  }
-                }
+      let refInd_val = checkBrack(i, k, val, false);
+      if(refInd_val == -1) {
+        return;
+      }
+      valuesI[k] = refInd_val[1];
+      if(refInd_val[0] == -1) {
+        // check if the name is already used
+        for (let k = 0; k < cellList.length; k++) {
+          for (let r = 1; r <= i; r++) {
+            for (let f = 0; f < values[r][nameInd].length; f++) {
+              if ((r < i || f < k) && cellList[k]==values[r][nameInd][k]) {
+                inconsist_replacing_elem(i, nameInd, k, findNewName(cellList[k]), `name "${cellList[k]} at ${getAddress(i, j)} already at ${getAddress(r, nameInd)}`);
+                return;
               }
             }
-            data[i] = undefined;
-            found = true;
-            break;
           }
         }
-        if(!found) {
-          inconsist_replacing_elem(i, nameInd, k, `The column named "${columnTitle}" at ${getAddress(i, nameInd)} doesn't have the attribute "${att_col_NAME[0]}".`)
-          return -1;
-        }
-        valuesI[k] = att_col_NAME[0] + (att_col_NAME[0].includes(" ")?" ":"") + "[" + columnTitle + "]";
       } else {
-        found = false;
-        for(let key in attNames) {
-          for(let m = 0; m < attNames[key].length; m++) {
-            if(attNames[key][m] == att_col_NAME[0]) {
-              if(found) {
-                inconsist_replacing_elem(i, nameInd, k, findNewName(val, false), `The attribute at ${getAddress(i, nameInd)} exists in multiple columns.`);
-                return -1;
+        if(values[i][mediaInd]) {
+          inconsist_removing_elem(i, nameInd, k, `there is a medium at "${cellList[k]} although the row references an attribute`);
+          return;
+        }
+        for(let r = 0; r < values.length; r++) {
+          for(let f = 0; f < data[r].attributes.length; f++) {
+            if(data[r].attributes[f] == accAttr[columnInd] + m) {
+              for(let cond in data[i]) {
+                data[r][cond].concat(data[i][cond]);
               }
-              for(let r = 0; r < values.length; r++) {
-                for(let f = 0; f < data[r].attributes.length; f++) {
-                  if(data[r].attributes[f] == accAttr[key] + m) {
-                    for(let cond in data[i]) {
-                      data[r][cond].concat(data[i][cond]);
-                    }
-                  }
-                }
-              }
-              data[i] = undefined;
-              found = true;
-              break;
             }
           }
         }
       }
+      data[i] = undefined;
     }
   }
 
