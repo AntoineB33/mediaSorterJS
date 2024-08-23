@@ -26,6 +26,7 @@ Public sheetCodeName As String
 Public listBoxList As Object
 Public ListSuggSt As String
 
+
 Private Type SYSTEMTIME
     wYear As Integer
     wMonth As Integer
@@ -36,6 +37,87 @@ Private Type SYSTEMTIME
     wSecond As Integer
     wMilliseconds As Integer
 End Type
+
+
+Private Sub Workbook_Open()
+    labelTopPos = 150
+    labelLeftPos = 0
+    labelHeight = 18
+    labelSpacing = 0
+    labelWidth = 114
+    avgCharWidth = 6 ' Adjust this value based on your font size and type
+
+    RunAndWait ("cmd.exe /C C:\Users\abarb\Documents\health\news_underground\mediaSorter\programs\excel_prog\mediaSorter\stopNodeJS.bat")
+    
+    Call Shell("cmd.exe /C C:\Users\abarb\Documents\health\news_underground\mediaSorter\programs\excel_prog\mediaSorter\startNodeJS.bat", vbHide)
+    
+    Dim check As String
+    check = checkSendRequestToNodeJSEndpoint
+    If check = "Request timed out." Then
+        MsgBox "The server is not responding. Please make sure the Node.js server is running."
+        Exit Sub
+    End If
+    
+    ' Dim isServerUp As Boolean
+    ' Dim serverStarted As Boolean
+    ' Dim waitTime As Long
+    
+    ' ' Set your server's address and port here
+    ' waitTime = 1000 ' 1 second
+    ' ' Wait for the server to start by checking if the port is open
+    ' serverStarted = False
+    
+    ' Do While Not serverStarted
+    '     isServerUp = CheckIfServerIsUp
+        
+    '     If isServerUp Then
+    '         serverStarted = True
+    '     Else
+    '         Debug.Print "issues when starting the server..."
+    '         Sleep waitTime ' Wait for 1 second before trying again
+    '     End If
+        
+    '     DoEvents ' Keep the VBA application responsive during the wait
+    ' Loop
+
+
+    timerStarted = False
+    lastIsChg = False
+    Set requests = New Collection
+
+
+    
+    Dim ref As Object
+    On Error Resume Next
+    ' Check if the reference is already added
+    Set ref = ThisWorkbook.VBProject.References("Scripting")
+    On Error GoTo 0
+    
+    ' If the reference is not added, add it
+    If ref Is Nothing Then
+        ThisWorkbook.VBProject.References.AddFromGuid _
+            GUID:="{420B2830-E718-11CF-893D-00A0C9054228}", Major:=1, Minor:=0
+    End If
+
+
+
+
+    UserForm1.SortButton.Caption = "Sort"
+    UserForm1.updateButton.Caption = "update"
+    UserForm1.ctrlZButton.Caption = "ctrlZ"
+    UserForm1.ctrlYButton.Caption = "ctrlY"
+    UserForm1.PowerPointButton.Caption = "PowerPoint"
+    UserForm1.Show vbModeless ' Show the UserForm without blocking Excel
+
+    Set sheetList = CreateObject("Scripting.Dictionary")
+    Set sorting = CreateObject("Scripting.Dictionary")
+    Set targetAddress = CreateObject("Scripting.Dictionary")
+    Set listBoxList = CreateObject("Scripting.Dictionary")
+    ListSuggSt = "ListSugg"
+    logFile = "C:\Users\abarb\Documents\health\news_underground\mediaSorter\programs\excel_prog\mediaSorter\log.txt"
+    ClearTextFile logFile
+    Workbook_SheetActivate activeSheet
+End Sub
 
 Public Sub CheckHttpResponse()
     Dim http As Object
@@ -356,7 +438,7 @@ Private Sub Workbook_SheetChange(ByVal Sh As Object, ByVal Target As range)
     For Each cell In Target
         changes(i, 1) = cell.Row
         changes(i, 2) = cell.Column
-        changes(i, 3) = cell.Value
+        changes(i, 3) = CStr(cell.Value)
         i = i + 1
     Next cell
     
@@ -517,64 +599,6 @@ Public Sub CallJavaScriptFunctionAsync(ByVal funcName As String, ParamArray para
     ' Send the request with the function name and parameters
     http.send jsonRequest
 
-
-    ' ' Wait and check if the acknowledgment file exists
-    ' Dim fileExists As Boolean
-    ' Dim attempts As Integer
-    ' attempts = 0
-
-    ' Do
-    '     attempts = attempts + 1
-    '     fileExists = LineExistsInFile("C:\\Users\\abarb\\Documents\\health\\news_underground\\mediaSorter\\programs\\excel_prog\\mediaSorter\\received.txt", timestamp)
-
-    '     If fileExists Then
-    '         Exit Do
-    '     End If
-
-    '     ' Wait for a short time before checking again
-    '     Application.Wait (Now + TimeValue("0:00:01"))
-
-    '     ' Optionally limit the number of attempts
-    '     If attempts > 10 Then
-    '         Debug.Print "connection error"
-    '         Exit Do
-    '     End If
-    ' Loop
-
-    
-
-
-    ' Dim serverStarted As Boolean
-    ' Dim waitTime As Long
-    
-    ' ' Set your server's address and port here
-    ' waitTime = 1000 ' 1 second
-    ' ' Wait for the server to start by checking if the port is open
-    ' serverStarted = False
-    
-    ' Do While Not serverStarted
-    
-    '     Debug.Print "http.readyState"
-    '     If http.readyState = 4 Then
-    '         Debug.Print "http.Status"
-    '         If http.Status = 200 Then
-    '             Debug.Print "True"
-    '             serverStarted = True
-    '         Else
-    '             Debug.Print "sleep2"
-    '             Sleep waitTime ' Wait for 1 second before trying again
-    '         End If
-    '     Else
-    '         Debug.Print "sleep"
-    '         Sleep waitTime ' Wait for 1 second before trying again
-    '     End If
-    '     Debug.Print "True"
-    '     DoEvents
-    ' Loop
-    ' Debug.Print "6"
-
-
-
     ' Add lines of text to the file
     AddLineToTextFile logFile, "Invoke-RestMethod -Uri http://localhost:3000/execute -Method Post -Headers @{ ""Content-Type"" = ""application/json"" } -Body '" & jsonRequest & "'"
     
@@ -601,81 +625,56 @@ Sub RunAndWait(command As String)
     Loop
 End Sub
 
-Private Sub Workbook_Open()
-    labelTopPos = 150
-    labelLeftPos = 0
-    labelHeight = 18
-    labelSpacing = 0
-    labelWidth = 114
-    avgCharWidth = 6 ' Adjust this value based on your font size and type
-
-    RunAndWait ("cmd.exe /C C:\Users\abarb\Documents\health\news_underground\mediaSorter\programs\excel_prog\mediaSorter\stopNodeJS.bat")
+Function SendRequestToNodeJSEndpoint()
+    Dim xmlhttp As Object
+    Dim url As String
+    Dim startTime As Double
+    Dim timeOutSeconds As Double
+    Dim responseReceived As Boolean
+    Dim res As String
     
-    Call Shell("cmd.exe /C C:\Users\abarb\Documents\health\news_underground\mediaSorter\programs\excel_prog\mediaSorter\startNodeJS.bat", vbHide)
+    ' Define your endpoint URL
+    url = "http://localhost:3000/checkServer"
     
-    Sleep 3000
+    ' Define the timeout duration (in seconds)
+    timeOutSeconds = 5 ' 30 seconds timeout
     
-    ' Dim isServerUp As Boolean
-    ' Dim serverStarted As Boolean
-    ' Dim waitTime As Long
+    ' Record the start time
+    startTime = Timer
     
-    ' ' Set your server's address and port here
-    ' waitTime = 1000 ' 1 second
-    ' ' Wait for the server to start by checking if the port is open
-    ' serverStarted = False
+    ' Initialize the response flag
+    responseReceived = False
     
-    ' Do While Not serverStarted
-    '     isServerUp = CheckIfServerIsUp
+    Do
+        ' Create an XMLHTTP object
+        Set xmlhttp = CreateObject("MSXML2.XMLHTTP")
         
-    '     If isServerUp Then
-    '         serverStarted = True
-    '     Else
-    '         Debug.Print "issues when starting the server..."
-    '         Sleep waitTime ' Wait for 1 second before trying again
-    '     End If
+        ' Send the HTTP GET request to the Node.js server
+        xmlhttp.Open "GET", url, False
+        xmlhttp.Send
         
-    '     DoEvents ' Keep the VBA application responsive during the wait
-    ' Loop
-
-
-    timerStarted = False
-    lastIsChg = False
-    Set requests = New Collection
-
-
+        ' Check if the request was successful
+        If xmlhttp.Status = 200 Then
+            responseReceived = True
+            res = "Response received: " & xmlhttp.responseText
+            Exit Do
+        End If
+        
+        ' Check if the timeout has been reached
+        If Timer - startTime > timeOutSeconds Then
+            res = "Request timed out."
+            Exit Do
+        End If
+        
+        ' Wait for a short interval before retrying
+        Application.Wait (Now + TimeValue("00:00:01"))
+        
+    Loop Until responseReceived
     
-    Dim ref As Object
-    On Error Resume Next
-    ' Check if the reference is already added
-    Set ref = ThisWorkbook.VBProject.References("Scripting")
-    On Error GoTo 0
-    
-    ' If the reference is not added, add it
-    If ref Is Nothing Then
-        ThisWorkbook.VBProject.References.AddFromGuid _
-            GUID:="{420B2830-E718-11CF-893D-00A0C9054228}", Major:=1, Minor:=0
-    End If
-
-
-
-
-    UserForm1.SortButton.Caption = "Sort"
-    UserForm1.updateButton.Caption = "update"
-    UserForm1.ctrlZButton.Caption = "ctrlZ"
-    UserForm1.ctrlYButton.Caption = "ctrlY"
-    UserForm1.PowerPointButton.Caption = "PowerPoint"
-    UserForm1.Show vbModeless ' Show the UserForm without blocking Excel
-
-    Set sheetList = CreateObject("Scripting.Dictionary")
-    Set sorting = CreateObject("Scripting.Dictionary")
-    Set targetAddress = CreateObject("Scripting.Dictionary")
-    Set listBoxList = CreateObject("Scripting.Dictionary")
-    ListSuggSt = "ListSugg"
-    logFile = "C:\Users\abarb\Documents\health\news_underground\mediaSorter\programs\excel_prog\mediaSorter\log.txt"
-    ClearTextFile logFile
-    Workbook_SheetActivate activeSheet
+    ' Clean up
+    Set xmlhttp = Nothing
+    SendRequestToNodeJSEndpoint = res
 End Sub
-
 
 
 

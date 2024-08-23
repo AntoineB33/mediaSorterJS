@@ -4,7 +4,7 @@
         {
             "label": "Run Custom Command",
             "type": "shell",
-            "command": "cmd.exe /C C:\\Users\\abarb\\Documents\\health\\news_underground\\mediaSorter\\programs\\excel_prog\\mediaSorter\\stopNodeJS.bat", 
+            "command": "& 'C:\\Users\\abarb\\Documents\\health\\news_underground\\mediaSorter\\programs\\excel_prog\\mediaSorter\\stopNodeJS.bat'; Start-Sleep -Seconds 2",
             "problemMatcher": [],
             "group": {
                 "kind": "build",
