@@ -180,9 +180,9 @@ function handleChange(updates) {
         values0[sheetCodeName].push([]);
       }
       for (let i = 0; i < values.length; i++) {
-        while (values[i].length <= column) {
+        while (values[i].length <= colNumb) {
           values[i].push([]);
-          values0[sheetCodeName][i].push([]);
+          values0[sheetCodeName][i].push(null);
         }
       }
       let splitValue = [];
@@ -420,8 +420,8 @@ function check() {
   let acc = 0;
   let accAttr = {};
   for (let j = 0; j < colNumb; j++) {
-    let colTitle = values0[sheetCodeName][0][j]
-    if(colTitle){
+    let colTitle = values0[sheetCodeName][0][j];
+    if(colTitle !== null){
       colTitle = colTitle.split(";");
     } else {
       colTitle = [];
