@@ -500,73 +500,75 @@ function check() {
     if (columnTypes[j] == allColumnTypes.CONDITIONS) {
       let colPattern = values[0][j];
       if(colPattern.length) {
-        colPattern = colPattern.split("?!");
+        colPattern = colPattern[0].split("?!");
       }
       for (let i = 1; i < nbLineBef; i++) {
         let formula;
-        if (values[i][j].length + (colPattern?1:-1) > colPattern.length) {
+        if (values[i][j].length + (colPattern.length?1:-1) > colPattern.length) {
           inconsist_removing_elem(i, j, k, `Too much arguments at ${getAddress(i, j)}.`);
           return;
         }
-        if(colPattern.length) {
-          formula = colPattern.map((str, index) => str + values[i][j][index]).join('');
-        }
-        let tree = parseExpression(formula);
-        let necessarySubformulas = findNecessarySubformulas(tree);
-        for(let r = 0; r < necessarySubformulas.length; r++) {
-          if(necessarySubformulas[r][0] == 'a') {
-            necessarySubformulas[r] = necessarySubformulas[r].slice(1).split('"').map(s => s.trim());
-            let val;
-            let val2;
-            if(![5, 7, 9].includes(necessarySubformulas[r].length)) {
-              inconsist_removing_elem(i, j, k, `incorrect condition.`);
-              return;
-            }
-            if(necessarySubformulas[r].length==5) {
-              val = necessarySubformulas[r].slice(0,2).join('"');
-              val2 = necessarySubformulas[r].slice(2).join('"');
-            } else if(necessarySubformulas[r].length==9) {
-              val = necessarySubformulas[r].slice(0, 4).join('"') + '"';
-              val2 = '"' + necessarySubformulas[r].slice(5).join('"');
-            } else if(necessarySubformulas[r][2]) {
-              val = necessarySubformulas[r].slice(0, 4).join('"') + '"';
-              val2 = '"' + necessarySubformulas[r].slice(5).join('"');
-            } else {
-              val = necessarySubformulas[r].slice(0,2).join('"');
-              val2 = necessarySubformulas[r].slice(2).join('"') + '"';
-            }
-            let refInd_val = checkBrack(i, k, val);
-            if(refInd_val == -1) {
-              return;
-            }
-            if(refInd_val[0] == -1) {
-              inconsist_removing_elem(i, j, k, `attribute "${val}" at ${getAddress(i, j)} not found.`);
-              return;
-            }
-            let refInd_val2 = checkBrack(i, k, val2);
-            if(refInd_val2 == -1) {
-              return;
-            }
-            if(refInd_val2[0] == -1) {
-              found = false;
-              for (let r = 1; r < values.length; r++) {
-                for (let f = 0; f < values[r][nameInd].length; f++) {
-                  if (refInd_val2[1]==values[r][nameInd][k]) {
-                    data[i].precedents.push(r);
-                    data[r].posteriors.push([i, ]);
-                    found = true;
+        if(values[i][j].length) {
+          if(colPattern.length) {
+            formula = colPattern[0] + colPattern.slice(1).map((str, index) => values[i][j][index] + str).join('');
+          }
+          let tree = parseExpression(formula);
+          let necessarySubformulas = findNecessarySubformulas(tree);
+          for(let r = 0; r < necessarySubformulas.length; r++) {
+            if(necessarySubformulas[r][0] == 'a') {
+              necessarySubformulas[r] = necessarySubformulas[r].slice(1).split('"').map(s => s.trim());
+              let val;
+              let val2;
+              if(![5, 7, 9].includes(necessarySubformulas[r].length)) {
+                inconsist_removing_elem(i, j, 0, `incorrect condition.`);
+                return;
+              }
+              if(necessarySubformulas[r].length==5) {
+                val = necessarySubformulas[r].slice(0,2).join('"');
+                val2 = necessarySubformulas[r].slice(2).join('"');
+              } else if(necessarySubformulas[r].length==9) {
+                val = necessarySubformulas[r].slice(0, 4).join('"') + '"';
+                val2 = '"' + necessarySubformulas[r].slice(5).join('"');
+              } else if(necessarySubformulas[r][2]) {
+                val = necessarySubformulas[r].slice(0, 4).join('"') + '"';
+                val2 = '"' + necessarySubformulas[r].slice(5).join('"');
+              } else {
+                val = necessarySubformulas[r].slice(0,2).join('"');
+                val2 = necessarySubformulas[r].slice(2).join('"') + '"';
+              }
+              let refInd_val = checkBrack(i, k, val);
+              if(refInd_val == -1) {
+                return;
+              }
+              if(refInd_val[0] == -1) {
+                inconsist_removing_elem(i, j, k, `attribute "${val}" at ${getAddress(i, j)} not found.`);
+                return;
+              }
+              let refInd_val2 = checkBrack(i, k, val2);
+              if(refInd_val2 == -1) {
+                return;
+              }
+              if(refInd_val2[0] == -1) {
+                found = false;
+                for (let r = 1; r < values.length; r++) {
+                  for (let f = 0; f < values[r][nameInd].length; f++) {
+                    if (refInd_val2[1]==values[r][nameInd][k]) {
+                      data[i].precedents.push(r);
+                      data[r].posteriors.push([i, ]);
+                      found = true;
+                      break;
+                    }
+                  }
+                  if(found) {
                     break;
                   }
                 }
-                if(found) {
-                  break;
-                }
               }
+              values[i][j][0] = "a" + refInd_val[1] + refInd_val2[1];
+            } else {
+              inconsist_removing_elem(i, j, k, `incorrect condition.`);
+              return;
             }
-            values[i][j][0] = "a" + refInd_val[1] + refInd_val2[1];
-          } else {
-            inconsist_removing_elem(i, j, k, `incorrect condition.`);
-            return;
           }
         }
       }
