@@ -384,6 +384,29 @@ function checkBrack(i, k, val, withQuotes = true) {
   return [refInd, val];
 }
 
+function replaceWithWords(inputString) {
+  const pattern = /a".*"(?:\[.*\])?/g;
+  let wordIndex = 0;
+  const wordMap = new Map();
+
+  function generateWord(index) {
+    const letters = 'abcdefghijklmnopqrstuvwxyz';
+    let word = '';
+    while (index >= 0) {
+      word = letters[index % 26] + word;
+      index = Math.floor(index / 26) - 1;
+    }
+    return word;
+  }
+
+  return inputString.replace(pattern, (match) => {
+    if (!wordMap.has(match)) {
+      wordMap.set(match, generateWord(wordIndex++));
+    }
+    return wordMap.get(match);
+  });
+}
+
 function check() {
   resolved[sheetCodeName] = false;
   let found;
@@ -512,29 +535,39 @@ function check() {
           if(colPattern.length) {
             formula = colPattern[0] + colPattern.slice(1).map((str, index) => values[i][j][index] + str).join('');
           }
-          let tree = parseExpression(formula);
+          let result = replaceWithSameWord(formula);
+          let tree = parseExpression(result.result);
           let necessarySubformulas = findNecessarySubformulas(tree);
           for(let r = 0; r < necessarySubformulas.length; r++) {
-            if(necessarySubformulas[r][0] == 'a') {
-              necessarySubformulas[r] = necessarySubformulas[r].slice(1).split('"').map(s => s.trim());
+            let theCond = result.reverseReplacements[necessarySubformulas[r]];
+            if(theCond[0] == 'a') {
+              const matches = [];
+              let match;
+              
+              // Use a while loop to find all matches
+              while ((match = regex.exec(theCond)) !== null) {
+                  matches.push(match[0]); // match[0] contains the entire match
+              }
+
+              theCond = theCond.slice(1).split('"').map(s => s.trim());
               let val;
               let val2;
-              if(![5, 7, 9].includes(necessarySubformulas[r].length)) {
+              if(![3, 5, 7, 9].includes(theCond.length)) {
                 inconsist_removing_elem(i, j, 0, `incorrect condition.`);
                 return;
               }
-              if(necessarySubformulas[r].length==5) {
-                val = necessarySubformulas[r].slice(0,2).join('"');
-                val2 = necessarySubformulas[r].slice(2).join('"');
-              } else if(necessarySubformulas[r].length==9) {
-                val = necessarySubformulas[r].slice(0, 4).join('"') + '"';
-                val2 = '"' + necessarySubformulas[r].slice(5).join('"');
-              } else if(necessarySubformulas[r][2]) {
-                val = necessarySubformulas[r].slice(0, 4).join('"') + '"';
-                val2 = '"' + necessarySubformulas[r].slice(5).join('"');
+              if(theCond.length==5) {
+                val = theCond.slice(0,2).join('"');
+                val2 = theCond.slice(2).join('"');
+              } else if(theCond.length==9) {
+                val = theCond.slice(0, 4).join('"') + '"';
+                val2 = '"' + theCond.slice(5).join('"');
+              } else if(theCond[2]) {
+                val = theCond.slice(0, 4).join('"') + '"';
+                val2 = '"' + theCond.slice(5).join('"');
               } else {
-                val = necessarySubformulas[r].slice(0,2).join('"');
-                val2 = necessarySubformulas[r].slice(2).join('"') + '"';
+                val = theCond.slice(0,2).join('"');
+                val2 = theCond.slice(2).join('"') + '"';
               }
               let refInd_val = checkBrack(i, k, val);
               if(refInd_val == -1) {
@@ -566,7 +599,7 @@ function check() {
               }
               values[i][j][0] = "a" + refInd_val[1] + refInd_val2[1];
             } else {
-              inconsist_removing_elem(i, j, k, `incorrect condition.`);
+              inconsist_removing_elem(i, j, 0, `incorrect condition.`);
               return;
             }
           }
@@ -1792,21 +1825,51 @@ function findNecessarySubformulas(node) {
     }
 }
 
+function replaceWithSameWord(str) {
+  const regex = /a\".*?\"(?:\[\w*\])?/g; // The regex pattern
+  const replacements = {}; // Object to store replacements
+  const reverseReplacements = {}; // Object to store reverse mapping
+  let wordCounter = 1; // Counter to generate new words
+
+  function generateWord() {
+      return `word${wordCounter++}`; // Generates a new word like "word1", "word2", etc.
+  }
+
+  const result = str.replace(regex, (match) => {
+      if (!replacements[match]) {
+          const newWord = generateWord();
+          replacements[match] = newWord;
+          reverseReplacements[newWord] = match; // Store the reverse mapping
+      }
+      return replacements[match];
+  });
+
+  return { result, reverseReplacements };
+}
 
 app.post('/test', (req, res) => {
 
+  const inputString = 'a"r" && a"r"[89]';
+  const result = replaceWithSameWord(inputString);
+  console.log(result);
 
+  
+  // // Example usage
+  // const inputString = 'a"example"[test] some text a"another" more text a"example"[test]';
+  // const outputString = replaceWithWords(inputString);
+  // console.log(outputString);
 
-  // Example usage:
-  const formula = "(A == 1) && (B == 2 || (C == 3) && (D == 4))";
-  // const formula = "(A == 1) && ((C == 3) && (B == 2) || (C == 3) && (D == 4))"
-  // const formula = "(A == 1) && (B == 2) || (C == 3) && (D == 4)"
-  // const formula = "(A == 1) && (B == 2 || (C == 3) && (D == 4))"
-  // const formula = "(A == 1) && (C == 3) || (C == 3) && (D == 4)"
-  const tree = parseExpression(formula);
-  const necessarySubformulas = findNecessarySubformulas(tree);
+  // // Example usage:
+  // const formula = '(a[b]) && (B == 2 || (C == 3) && (D == 4))';
+  // // const formula = "(A == 1) && (B == 2 || (C == 3) && (D == 4))";
+  // // const formula = "(A == 1) && ((C == 3) && (B == 2) || (C == 3) && (D == 4))"
+  // // const formula = "(A == 1) && (B == 2) || (C == 3) && (D == 4)"
+  // // const formula = "(A == 1) && (B == 2 || (C == 3) && (D == 4))"
+  // // const formula = "(A == 1) && (C == 3) || (C == 3) && (D == 4)"
+  // const tree = parseExpression(formula);
+  // const necessarySubformulas = findNecessarySubformulas(tree);
 
-  console.log("Necessary Subformulas:", necessarySubformulas);
+  // console.log("Necessary Subformulas:", necessarySubformulas);
 
   
   res.json("response");
