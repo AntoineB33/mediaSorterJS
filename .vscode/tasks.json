@@ -2,14 +2,15 @@
     "version": "2.0.0",
     "tasks": [
         {
-            "label": "Run Custom Command",
+            "label": "Stop Node.js",
             "type": "shell",
-            "command": "& 'C:\\Users\\abarb\\Documents\\health\\news_underground\\mediaSorter\\programs\\excel_prog\\mediaSorter\\stopNodeJS.bat'; Start-Sleep -Seconds 2",
-            "problemMatcher": [],
-            "group": {
-                "kind": "build",
-                "isDefault": true
-            }
+            "command": "${workspaceFolder}\\stopNodeJS.bat"
+        },
+        {
+            "label": "Invoke API",
+            "type": "shell",
+            "command": "Invoke-RestMethod -Uri http://localhost:3000/test -Method Post -Headers @{ \"Content-Type\" = \"application/json\" } -Body ''",
+            "problemMatcher": []
         }
     ]
 }

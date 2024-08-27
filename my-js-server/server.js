@@ -5,6 +5,7 @@ const walk = require('acorn-walk');
 const { exec } = require('child_process');
 const app = express();
 const port = 3000;
+const regex = /a\s*(?<delay>[<>]?\d)?(?<attrib_ref>\".+?\"\s*(\[\".+?\])?)?\s*(?<precedent>\".+?\"\s*(\[\".+?\])?)/g;
 // Middleware to parse JSON bodies
 app.use(express.json());
 
@@ -532,22 +533,36 @@ function check() {
           return;
         }
         if(values[i][j].length) {
+          formula = values[i][j][0];
           if(colPattern.length) {
             formula = colPattern[0] + colPattern.slice(1).map((str, index) => values[i][j][index] + str).join('');
           }
-          let result = replaceWithSameWord(formula);
-          let tree = parseExpression(result.result);
-          let necessarySubformulas = findNecessarySubformulas(tree);
+          let { replacedWithWords, reverseReplacements } = replaceWithSameWord(formula);
+          let necessarySubformulas;
+          try{
+            let tree = parseExpression(replacedWithWords);
+            necessarySubformulas = findNecessarySubformulas(tree);
+          } catch(e) {
+            inconsist_removing_elem(i, j, 0, `incorrect condition.`);
+            return;
+          }
           for(let r = 0; r < necessarySubformulas.length; r++) {
-            let theCond = result.reverseReplacements[necessarySubformulas[r]];
+            let theCond = reverseReplacements[necessarySubformulas[r]];
             if(theCond[0] == 'a') {
-              const matches = [];
-              let match;
-              
-              // Use a while loop to find all matches
-              while ((match = regex.exec(theCond)) !== null) {
-                  matches.push(match[0]); // match[0] contains the entire match
-              }
+              let match = regex.exec(str);
+              // let refInd_val = null;
+              // if(match.groups.attrib_ref) {
+              //   refInd_val = checkBrack(i, 0, match.groups.attrib_ref);
+              //   if(refInd_val == -1) {
+              //     return;
+              //   }
+              //   if(refInd_val[0] == -1) {
+              //     inconsist_removing_elem(i, j, k, `attribute "${val}" at ${getAddress(i, j)} not found.`);
+              //     return;
+              //   }
+              //   if(match.groups.delay)
+              // }
+
 
               theCond = theCond.slice(1).split('"').map(s => s.trim());
               let val;
@@ -1826,7 +1841,6 @@ function findNecessarySubformulas(node) {
 }
 
 function replaceWithSameWord(str) {
-  const regex = /a\".*?\"(?:\[\w*\])?/g; // The regex pattern
   const replacements = {}; // Object to store replacements
   const reverseReplacements = {}; // Object to store reverse mapping
   let wordCounter = 1; // Counter to generate new words
@@ -1848,31 +1862,149 @@ function replaceWithSameWord(str) {
 }
 
 app.post('/test', (req, res) => {
-
-  const inputString = 'a"r" && a"r"[89]';
-  const result = replaceWithSameWord(inputString);
-  console.log(result);
-
   
-  // // Example usage
-  // const inputString = 'a"example"[test] some text a"another" more text a"example"[test]';
-  // const outputString = replaceWithWords(inputString);
-  // console.log(outputString);
+  class Graph {
+    constructor(vertices) {
+        this.V = vertices;
+        this.adjList = new Map();
+    }
 
-  // // Example usage:
-  // const formula = '(a[b]) && (B == 2 || (C == 3) && (D == 4))';
-  // // const formula = "(A == 1) && (B == 2 || (C == 3) && (D == 4))";
-  // // const formula = "(A == 1) && ((C == 3) && (B == 2) || (C == 3) && (D == 4))"
-  // // const formula = "(A == 1) && (B == 2) || (C == 3) && (D == 4)"
-  // // const formula = "(A == 1) && (B == 2 || (C == 3) && (D == 4))"
-  // // const formula = "(A == 1) && (C == 3) || (C == 3) && (D == 4)"
-  // const tree = parseExpression(formula);
-  // const necessarySubformulas = findNecessarySubformulas(tree);
+    addVertex(v) {
+        this.adjList.set(v, []);
+    }
 
-  // console.log("Necessary Subformulas:", necessarySubformulas);
+    addEdge(u, v, weight) {
+        this.adjList.get(u).push({ node: v, weight: weight });
+    }
+
+    topologicalSortUtil(v, visited, stack) {
+        visited[v] = true;
+
+        let neighbors = this.adjList.get(v);
+        for (let i = 0; i < neighbors.length; i++) {
+            let neighbor = neighbors[i].node;
+            if (!visited[neighbor]) {
+                this.topologicalSortUtil(neighbor, visited, stack);
+            }
+        }
+
+        stack.push(v);
+    }
+
+    isCyclicUtil(v, visited, recStack) {
+        if (!visited[v]) {
+            visited[v] = true;
+            recStack[v] = true;
+
+            let neighbors = this.adjList.get(v);
+            for (let i = 0; i < neighbors.length; i++) {
+                let neighbor = neighbors[i].node;
+                if (!visited[neighbor] && this.isCyclicUtil(neighbor, visited, recStack)) {
+                    return true;
+                } else if (recStack[neighbor]) {
+                    return true;
+                }
+            }
+        }
+        recStack[v] = false;
+        return false;
+    }
+
+    isCyclic() {
+        let visited = {};
+        let recStack = {};
+
+        for (let i = 0; i < this.V.length; i++) {
+            let node = this.V[i];
+            if (this.isCyclicUtil(node, visited, recStack)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    checkConstraints() {
+        let dist = {};
+        for (let i = 0; i < this.V.length; i++) {
+            dist[this.V[i]] = -Infinity;
+        }
+
+        let stack = [];
+        let visited = {};
+        for (let i = 0; i < this.V.length; i++) {
+            if (!visited[this.V[i]]) {
+                this.topologicalSortUtil(this.V[i], visited, stack);
+            }
+        }
+
+        dist[stack[stack.length - 1]] = 0;
+
+        while (stack.length > 0) {
+            let u = stack.pop();
+
+            if (dist[u] != -Infinity) {
+                let neighbors = this.adjList.get(u);
+                for (let i = 0; i < neighbors.length; i++) {
+                    let v = neighbors[i].node;
+                    let weight = neighbors[i].weight;
+                    if (dist[v] < dist[u] + weight) {
+                        dist[v] = dist[u] + weight;
+                    }
+                }
+            }
+        }
+
+        for (let i = 0; i < this.V.length; i++) {
+            let u = this.V[i];
+            let neighbors = this.adjList.get(u);
+            for (let j = 0; j < neighbors.length; j++) {
+                let v = neighbors[j].node;
+                let weight = neighbors[j].weight;
+                if (dist[v] < dist[u] + weight) {
+                    return false;
+                }
+            }
+        }
+
+        return true;
+    }
+}
+
+function canSortWithConstraints(elements, constraints) {
+    let graph = new Graph(elements);
+
+    elements.forEach(element => graph.addVertex(element));
+
+    for (let i = 0; i < constraints.length; i++) {
+        let [A, B, n] = constraints[i];
+        graph.addEdge(B, A, n);
+    }
+
+    if (graph.isCyclic()) {
+        return false;
+    }
+
+    return graph.checkConstraints();
+}
+
+// Example usage:
+let elements = ["A", "B", "C"];
+let constraints = [
+    ["A", "B", 2],  // A must be 2 places after B
+    ["B", "C", 1]   // B must be 1 place after C
+];
+
+let result = canSortWithConstraints(elements, constraints);
+console.log(result ? "Possible" : "Impossible");
+  console.log("yyyyyyyyyyyyyyyyyyyyyyy")
+
 
   
   res.json("response");
+});
+
+app.get('/health', (req, res) => {
+  res.status(200).send('Server is healthy');
 });
 
 app.listen(port, () => {

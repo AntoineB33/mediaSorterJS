@@ -1,3 +1,1 @@
-Invoke-RestMethod -Uri http://localhost:3000/execute -Method Post -Headers @{ "Content-Type" = "application/json" } -Body '{"timestamp":"newSheet 2024-08-26 01:45:56.800","functionName":"newSheet","sheetCodeName":"Feuil3","values":[["names",null,null,null,"a\"?!\"","media"],["h",null,null,null,null,null],["h -2",null,null,null,"h",null]]}'
-Invoke-RestMethod -Uri http://localhost:3000/execute -Method Post -Headers @{ "Content-Type" = "application/json" } -Body '{"timestamp":"chgSheet 2024-08-26 01:45:56.809","functionName":"chgSheet","sheetCodeName":"Feuil3","headerColors":[65535,65535,65535,65535,16777215,65535]}'
-Invoke-RestMethod -Uri http://localhost:3000/execute -Method Post -Headers @{ "Content-Type" = "application/json" } -Body '{"timestamp":"selectionChange 2024-08-26 01:45:56.812","functionName":"selectionChange","selection":"$E$3"}'
+curl http://localhost:3000/endpoint1
