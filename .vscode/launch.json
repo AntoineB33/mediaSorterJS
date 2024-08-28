@@ -7,36 +7,12 @@
         {
             "type": "node",
             "request": "launch",
-            "name": "test",
+            "name": "Launch Program",
             "skipFiles": [
                 "<node_internals>/**"
             ],
             "program": "${workspaceFolder}\\my-js-server\\server.js",
-            "preLaunchTask": "Stop Node.js",
-            "postDebugTask": "Invoke API"
-        },
-        {
-            "type": "node",
-            "request": "launch",
-            "name": "Launch and Call Endpoint",
-            "skipFiles": [
-                "<node_internals>/**"
-            ],
-            "program": "${workspaceFolder}\\my-js-server\\server.js",
-            "preLaunchTask": "kill-node",
-            "postDebugTask": "call-endpoint"
-        },
-        {
-            "name": "Launch Server with Debug",
-            "type": "node",
-            "request": "launch",
-            "program": "${workspaceFolder}/my-js-server/server.js",
-            "preLaunchTask": "kill-node",
-            "runtimeArgs": ["--nolazy", "--inspect=9229"],
-            "sourceMaps": true,
-            "console": "integratedTerminal",
-            "internalConsoleOptions": "neverOpen",
-            "postDebugTask": "run-test-commands"
+            "restart": true
         }
     ]
 }

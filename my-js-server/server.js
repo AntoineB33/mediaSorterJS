@@ -5,7 +5,6 @@ const walk = require('acorn-walk');
 const { exec } = require('child_process');
 const app = express();
 const port = 3000;
-const regex = /a\s*(?<delay>[<>]?\d)?(?<attrib_ref>\".+?\"\s*(\[\".+?\])?)?\s*(?<precedent>\".+?\"\s*(\[\".+?\])?)/g;
 // Middleware to parse JSON bodies
 app.use(express.json());
 
@@ -303,109 +302,46 @@ function getAddress(i, j) {
   return getColumnTag(j) + ":" + (i + 1);
 }
 
-function checkQuotes(i, val) {
-  let countQuot = (val.match(new RegExp(`"`, 'g')) || []).length;
-  if(countQuot != 2 || columnTitle[0] != '"' || columnTitle[columnTitle.length - 1] != '"') {
-    inconsist_removing_elem(i, nameInd, 0, `The condition at ${getAddress(i, nameInd)} includes square brackets, thus should be in the format ""attribute"["column title"]".`)
-    return -1;
-  }
-  return 1;
-}
-
-function checkBrack(i, k, val, withQuotes = true) {
-  let countOpenBr = (val.match(new RegExp(`\\[`, 'g')) || []).length;
-  let countCloseBr = (val.match(new RegExp(`\\]`, 'g')) || []).length;
-  let refInd = -1;
-  if(countOpenBr || countCloseBr) {
-    let ind = val.indexOf('[');
-    if(val[-1] != ']' || countOpenBr != 1 || countCloseBr != 1 || ind == 0) {
-      val = val.replace(new RegExp(`[\\[\\]]`, 'g'), replacementChar);
-      inconsist_removing_elem(i, nameInd, k, `The name at ${getAddress(i, nameInd)} includes square brackets, thus should be in the format "attribute[column title]".`)
-      return -1;
-    }
-    let att_col_NAME = values[i][nameInd][k].split('[');
-    let columnTitle = att_col_NAME[1].slice(0, -1).trim();
-    if(withQuotes) {
-      if(checkQuotes(i, columnTitle) == -1) {
-        return -1;
-      }
-      columnTitle = columnTitle.slice(1, -1);
-    }
+function checkBrack(i, j, k, val, columnTitle) {
+  let isAtt = -2;
+  if(columnTitle !== undefined) {
+    isAtt = true;
     let columnInd = -1;
-    for(let j = 0; j < colNumb; j++) {
-      if(columnTypes[j] == allColumnTypes.ATTRIBUTES && values[0][j].includes(columnTitle)) {
-        columnInd = j;
+    for(let n = 0; n < colNumb; n++) {
+      if(columnTypes[n] == allColumnTypes.ATTRIBUTES && values[0][n].includes(columnTitle)) {
+        columnInd = n;
         break;
       }
     }
     if(columnInd == -1) {
-      inconsist_removing_elem(i, nameInd, k, `No column named "${columnTitle}" at ${getAddress(i, nameInd)} has attribute.`)
+      inconsist_removing_elem(i, j, k, `No attribute column named "${columnTitle}" at ${getAddress(i, j)}.`)
       return -1;
     }
-    att_col_NAME[0] = att_col_NAME[0].trim();
-    if(withQuotes) {
-      if(checkQuotes(i, att_col_NAME[0]) == -1) {
-        return -1;
-      }
-      att_col_NAME[0] = att_col_NAME[0].slice(1, -1);
-    }
     for(let m = 0; m < attNames[columnInd].length; m++) {
-      if(attNames[columnInd][m] == att_col_NAME[0]) {
-        refInd = m;
+      if(attNames[columnInd][m] == val) {
+        isAtt = m;
         break;
       }
     }
-    if(refInd == -1) {
-      inconsist_replacing_elem(i, nameInd, k, `The column named "${columnTitle}" at ${getAddress(i, nameInd)} doesn't have the attribute "${att_col_NAME[0]}".`)
+    if(isAtt == -2) {
+      inconsist_replacing_elem(i, j, k, `The column named "${columnTitle}" at ${getAddress(i, j)} doesn't have the attribute "${val}".`)
       return -1;
     }
-    let quotes = withQuotes?'"':'';
-    val = quotes + att_col_NAME[0] + quotes + (att_col_NAME[0].includes(" ")?" ":"") + "[" + quotes + columnTitle + quotes + "]";
   } else {
-    let theVal = val;
-    if(withQuotes) {
-      if(checkQuotes(i, theVal) == -1) {
-        return -1;
-      }
-      theVal = theVal.slice(1, -1);
-    }
     for(let key in attNames) {
       for(let m = 0; m < attNames[key].length; m++) {
         if(attNames[key][m] == theVal) {
-          if(refInd != -1) {
+          if(isAtt != -2) {
             inconsist_replacing_elem(i, nameInd, k, findNewName(val, false), `The attribute at ${getAddress(i, nameInd)} exists in multiple columns.`);
             return -1;
           }
-          refInd = m;
+          isAtt = m;
           break;
         }
       }
     }
   }
-  return [refInd, val];
-}
-
-function replaceWithWords(inputString) {
-  const pattern = /a".*"(?:\[.*\])?/g;
-  let wordIndex = 0;
-  const wordMap = new Map();
-
-  function generateWord(index) {
-    const letters = 'abcdefghijklmnopqrstuvwxyz';
-    let word = '';
-    while (index >= 0) {
-      word = letters[index % 26] + word;
-      index = Math.floor(index / 26) - 1;
-    }
-    return word;
-  }
-
-  return inputString.replace(pattern, (match) => {
-    if (!wordMap.has(match)) {
-      wordMap.set(match, generateWord(wordIndex++));
-    }
-    return wordMap.get(match);
-  });
+  return isAtt;
 }
 
 function check() {
@@ -416,17 +352,7 @@ function check() {
   var r;
 
   for (let i = 1; i < nbLineBef; i++) {
-    data.push({
-      isNotFollowing: [true],
-      precedents: [],
-      posteriors: [],
-      follower: [],
-      follower_to_attrib: [],
-      follower_with_delay: [],
-      followed_with_delay: [],
-      attributes:[],
-      other_conditions:[],
-    });
+    data.push({attributes: [], conditions: []});
     // check if a non-empty row has no name
     if(!values[i][nameInd].length) {
       for (let j = 0; j < values[i].length; j++) {
@@ -444,7 +370,7 @@ function check() {
   let acc = 0;
   let accAttr = {};
   for (let j = 0; j < colNumb; j++) {
-    let colTitle = values0[sheetCodeName][0][j];
+    let colTitle = values0[sheetCodeName][0][column];
     if(colTitle !== null){
       colTitle = colTitle.split(";");
     } else {
@@ -452,7 +378,7 @@ function check() {
     }
     for(let k = 0; k < colTitle.length; k++) {
       if(colTitle[k].match(/^[A-Z]+$/)) {
-        inconsist_replacing_elem(0, j, k, findNewName(colTitle[k]), `Column name at ${getAddress(0, j)} is only upper case letters.`);
+        inconsist_replacing_elem(0, column, k, findNewName(colTitle[k]), `Column name at ${getAddress(0, column)} is only upper case letters.`);
         return;
       }
     }
@@ -477,46 +403,6 @@ function check() {
           data[i].attributes.push(attInd);
           attributes[attInd] += 1;
         }
-      }
-    }
-  }
-  for(let i = 1; i < nbLineBef; i++) {
-    let valuesI = values[i][nameInd];
-    for(let k = 0; k < valuesI.length; k++) {
-      let val = valuesI[k];
-      let refInd_val = checkBrack(i, k, val, false);
-      if(refInd_val == -1) {
-        return;
-      }
-      valuesI[k] = refInd_val[1];
-      if(refInd_val[0] == -1) {
-        // check if the name is already used
-        for (let r = 1; r <= i; r++) {
-          for (let f = 0; f < values[r][nameInd].length; f++) {
-            if ((r < i || f < k) && valuesI[k]==values[r][nameInd][k]) {
-              inconsist_replacing_elem(i, nameInd, k, findNewName(valuesI[k]), `name "${valuesI[k]} at ${getAddress(i, nameInd)} already at ${getAddress(r, nameInd)}`);
-              return;
-            }
-          }
-        }
-      } else {
-        for(let key in attNames) {
-          let f = parseInt(key);
-          if(values[i][f].length) {
-            inconsist_removing_elem(i, f, 0, `there is an attribute at "${getAddress(i, f)} although the row references an attribute`);
-            return;
-          }
-        }
-        for(let r = 0; r < values.length; r++) {
-          for(let f = 0; f < data[r].attributes.length; f++) {
-            if(data[r].attributes[f] == accAttr[columnInd] + m) {
-              for(let cond in data[i]) {
-                data[r][cond].concat(data[i][cond]);
-              }
-            }
-          }
-        }
-        data[i] = undefined;
       }
     }
   }
@@ -550,75 +436,79 @@ function check() {
             let theCond = reverseReplacements[necessarySubformulas[r]];
             if(theCond[0] == 'a') {
               let match = regex.exec(str);
-              // let refInd_val = null;
-              // if(match.groups.attrib_ref) {
-              //   refInd_val = checkBrack(i, 0, match.groups.attrib_ref);
-              //   if(refInd_val == -1) {
-              //     return;
-              //   }
-              //   if(refInd_val[0] == -1) {
-              //     inconsist_removing_elem(i, j, k, `attribute "${val}" at ${getAddress(i, j)} not found.`);
-              //     return;
-              //   }
-              //   if(match.groups.delay)
-              // }
-
-
-              theCond = theCond.slice(1).split('"').map(s => s.trim());
-              let val;
-              let val2;
-              if(![3, 5, 7, 9].includes(theCond.length)) {
-                inconsist_removing_elem(i, j, 0, `incorrect condition.`);
-                return;
+              const regex = /a\s*(?:(?<min_d>\d)?\s*-\s*(?<max_d>\d)?)?\s*(?<attrib_ref>\".+?\"\s*(?<attrib_ref_col>\[\s*\".+?\s*\])?)?\s*(?<precedent>\".+?\"\s*(?<precedent_col>\[\s*\".+?\s*\])?)\s*/g;
+              let aCond = {};
+              aCond.min_d = match.groups.min_d;
+              aCond.max_d = match.groups.max_d;
+              if(match.groups.attrib_ref) {
+                let refInd_val = checkBrack(i, j, 0, match.groups.attrib_ref, match.groups.attrib_ref_col);
+                if(refInd_val == -1) {
+                  return;
+                }
+                if(refInd_val == -2) {
+                  inconsist_removing_elem(i, j, k, `attribute "${val}" at ${getAddress(i, j)} not found.`);
+                  return;
+                }
+                aCond.attrib_ref = refInd_val;
               }
-              if(theCond.length==5) {
-                val = theCond.slice(0,2).join('"');
-                val2 = theCond.slice(2).join('"');
-              } else if(theCond.length==9) {
-                val = theCond.slice(0, 4).join('"') + '"';
-                val2 = '"' + theCond.slice(5).join('"');
-              } else if(theCond[2]) {
-                val = theCond.slice(0, 4).join('"') + '"';
-                val2 = '"' + theCond.slice(5).join('"');
-              } else {
-                val = theCond.slice(0,2).join('"');
-                val2 = theCond.slice(2).join('"') + '"';
-              }
-              let refInd_val = checkBrack(i, k, val);
+              let refInd_val = checkBrack(i, j, 0, match.groups.precedent, match.groups.precedent_col);
               if(refInd_val == -1) {
                 return;
               }
-              if(refInd_val[0] == -1) {
-                inconsist_removing_elem(i, j, k, `attribute "${val}" at ${getAddress(i, j)} not found.`);
-                return;
+              if(refInd_val === -2) {
+                aCond.precedent_mediaRow = refInd_val;
+              } else {
+                aCond.precedent_att = refInd_val;
               }
-              let refInd_val2 = checkBrack(i, k, val2);
-              if(refInd_val2 == -1) {
-                return;
-              }
-              if(refInd_val2[0] == -1) {
-                found = false;
-                for (let r = 1; r < values.length; r++) {
-                  for (let f = 0; f < values[r][nameInd].length; f++) {
-                    if (refInd_val2[1]==values[r][nameInd][k]) {
-                      data[i].precedents.push(r);
-                      data[r].posteriors.push([i, ]);
-                      found = true;
-                      break;
-                    }
-                  }
-                  if(found) {
-                    break;
-                  }
-                }
-              }
-              values[i][j][0] = "a" + refInd_val[1] + refInd_val2[1];
+              data[i].conditions.push(aCond);
             } else {
               inconsist_removing_elem(i, j, 0, `incorrect condition.`);
               return;
             }
           }
         }
+      }
+    }
+  }
+  for(let i = 1; i < nbLineBef; i++) {
+    let valuesI = values[i][nameInd];
+    for(let k = 0; k < valuesI.length; k++) {
+      let val = valuesI[k];
+      const regexName = /a\s*(?:\"(?<val>.+?)\"\s*(?:\[\s*\"(?<columnTitle>.+?)\s*\])?)\s*/g;
+      let match = regexName.exec(val);
+      let refInd_val;
+      if(match !== null) {
+        refInd_val = checkBrack(i, nameInd, k, match.groups.val, match.groups.columnTitle);
+        if(refInd_val == -1) {
+          return;
+        }
+        valuesI[k] = '"' + val + '"' + (match.groups.columnTitle===undefined?"":'["' + match.groups.columnTitle + '"]');
+      }
+      if(refInd_val == -2) {
+        // check if the name is already used
+        for (let r = 1; r <= i; r++) {
+          for (let f = 0; f < values[r][nameInd].length; f++) {
+            if ((r < i || f < k) && valuesI[k]==values[r][nameInd][k]) {
+              inconsist_replacing_elem(i, nameInd, k, findNewName(valuesI[k]), `name "${valuesI[k]} at ${getAddress(i, nameInd)} already at ${getAddress(r, nameInd)}`);
+              return;
+            }
+          }
+        }
+      } else {
+        if(data[i].attributes.length) {
+          inconsist_removing_elem(i, f, 0, `there is an attribute at "${getAddress(i, f)} although the row references an attribute`);
+          return;
+        }
+        for(let r = 0; r < values.length; r++) {
+          for(let f = 0; f < data[r].attributes.length; f++) {
+            if(data[r].attributes[f] == refInd_val) {
+              for(let cond in data[i]) {
+                data[r][cond].concat(data[i][cond]);
+              }
+            }
+          }
+        }
+        data[i] = undefined;
       }
     }
   }
@@ -1862,146 +1752,10 @@ function replaceWithSameWord(str) {
 }
 
 app.post('/test', (req, res) => {
-  
-  class Graph {
-    constructor(vertices) {
-        this.V = vertices;
-        this.adjList = new Map();
-    }
 
-    addVertex(v) {
-        this.adjList.set(v, []);
-    }
-
-    addEdge(u, v, weight) {
-        this.adjList.get(u).push({ node: v, weight: weight });
-    }
-
-    topologicalSortUtil(v, visited, stack) {
-        visited[v] = true;
-
-        let neighbors = this.adjList.get(v);
-        for (let i = 0; i < neighbors.length; i++) {
-            let neighbor = neighbors[i].node;
-            if (!visited[neighbor]) {
-                this.topologicalSortUtil(neighbor, visited, stack);
-            }
-        }
-
-        stack.push(v);
-    }
-
-    isCyclicUtil(v, visited, recStack) {
-        if (!visited[v]) {
-            visited[v] = true;
-            recStack[v] = true;
-
-            let neighbors = this.adjList.get(v);
-            for (let i = 0; i < neighbors.length; i++) {
-                let neighbor = neighbors[i].node;
-                if (!visited[neighbor] && this.isCyclicUtil(neighbor, visited, recStack)) {
-                    return true;
-                } else if (recStack[neighbor]) {
-                    return true;
-                }
-            }
-        }
-        recStack[v] = false;
-        return false;
-    }
-
-    isCyclic() {
-        let visited = {};
-        let recStack = {};
-
-        for (let i = 0; i < this.V.length; i++) {
-            let node = this.V[i];
-            if (this.isCyclicUtil(node, visited, recStack)) {
-                return true;
-            }
-        }
-        return false;
-    }
-
-    checkConstraints() {
-        let dist = {};
-        for (let i = 0; i < this.V.length; i++) {
-            dist[this.V[i]] = -Infinity;
-        }
-
-        let stack = [];
-        let visited = {};
-        for (let i = 0; i < this.V.length; i++) {
-            if (!visited[this.V[i]]) {
-                this.topologicalSortUtil(this.V[i], visited, stack);
-            }
-        }
-
-        dist[stack[stack.length - 1]] = 0;
-
-        while (stack.length > 0) {
-            let u = stack.pop();
-
-            if (dist[u] != -Infinity) {
-                let neighbors = this.adjList.get(u);
-                for (let i = 0; i < neighbors.length; i++) {
-                    let v = neighbors[i].node;
-                    let weight = neighbors[i].weight;
-                    if (dist[v] < dist[u] + weight) {
-                        dist[v] = dist[u] + weight;
-                    }
-                }
-            }
-        }
-
-        for (let i = 0; i < this.V.length; i++) {
-            let u = this.V[i];
-            let neighbors = this.adjList.get(u);
-            for (let j = 0; j < neighbors.length; j++) {
-                let v = neighbors[j].node;
-                let weight = neighbors[j].weight;
-                if (dist[v] < dist[u] + weight) {
-                    return false;
-                }
-            }
-        }
-
-        return true;
-    }
-}
-
-function canSortWithConstraints(elements, constraints) {
-    let graph = new Graph(elements);
-
-    elements.forEach(element => graph.addVertex(element));
-
-    for (let i = 0; i < constraints.length; i++) {
-        let [A, B, n] = constraints[i];
-        graph.addEdge(B, A, n);
-    }
-
-    if (graph.isCyclic()) {
-        return false;
-    }
-
-    return graph.checkConstraints();
-}
-
-// Example usage:
-let elements = ["A", "B", "C"];
-let constraints = [
-    ["A", "B", 2],  // A must be 2 places after B
-    ["B", "C", 1]   // B must be 1 place after C
-];
-
-let result = canSortWithConstraints(elements, constraints);
-console.log(result ? "Possible" : "Impossible");
-  console.log("yyyyyyyyyyyyyyyyyyyyyyy")
-
-
-  
-  res.json("response");
+  res.json(result ? "Possible" : "Impossible");
 });
+
 
 app.get('/health', (req, res) => {
   res.status(200).send('Server is healthy');

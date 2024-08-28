@@ -1,16 +1,48 @@
 {
     "version": "2.0.0",
     "tasks": [
-        {
-            "label": "Stop Node.js",
-            "type": "shell",
-            "command": "${workspaceFolder}\\stopNodeJS.bat"
-        },
-        {
-            "label": "Invoke API",
-            "type": "shell",
-            "command": "Invoke-RestMethod -Uri http://localhost:3000/test -Method Post -Headers @{ \"Content-Type\" = \"application/json\" } -Body ''",
-            "problemMatcher": []
+      {
+        "label": "Kill Node.js Process 0",
+        "type": "shell",
+        "command": "powershell",
+        "args": [
+          "-Command",
+          "$process = Get-NetTCPConnection -LocalPort 3000 -ErrorAction SilentlyContinue | Select-Object -ExpandProperty OwningProcess; if ($process) { Stop-Process -Id $process -Force }; exit 0"
+        ],
+        "problemMatcher": [],
+        "options": {
+          "shell": {
+            "executable": "powershell.exe",
+            "args": []
+          }
         }
+      },
+      
+      {
+        "label": "Kill Node.js Process",
+        "type": "shell",
+        "command": "powershell",
+        "args": [
+          "-Command",
+          "$process = Get-NetTCPConnection -LocalPort 3000 -ErrorAction SilentlyContinue | Select-Object -ExpandProperty OwningProcess; if ($process) { Stop-Process -Id $process -Force }; exit 0"
+        ],
+        "problemMatcher": [],
+        "options": {
+          "shell": {
+            "executable": "powershell.exe",
+            "args": []
+          }
+        }
+      },
+      {
+        "label": "Start Node.js Server",
+        "type": "shell",
+        "command": "node",
+        "args": [
+          "${workspaceFolder}/my-js-server/server.js"
+        ],
+        "problemMatcher": []
+      }
     ]
-}
+  }
+  
