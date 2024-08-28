@@ -370,7 +370,7 @@ function check() {
   let acc = 0;
   let accAttr = {};
   for (let j = 0; j < colNumb; j++) {
-    let colTitle = values0[sheetCodeName][0][column];
+    let colTitle = values0[sheetCodeName][0][j];
     if(colTitle !== null){
       colTitle = colTitle.split(";");
     } else {
@@ -378,7 +378,7 @@ function check() {
     }
     for(let k = 0; k < colTitle.length; k++) {
       if(colTitle[k].match(/^[A-Z]+$/)) {
-        inconsist_replacing_elem(0, column, k, findNewName(colTitle[k]), `Column name at ${getAddress(0, column)} is only upper case letters.`);
+        inconsist_replacing_elem(0, j, k, findNewName(colTitle[k]), `Column name at ${getAddress(0, j)} is only upper case letters.`);
         return;
       }
     }
@@ -434,14 +434,14 @@ function check() {
           }
           for(let r = 0; r < necessarySubformulas.length; r++) {
             let theCond = reverseReplacements[necessarySubformulas[r]];
-            if(theCond[0] == 'a') {
-              let match = regex.exec(str);
-              const regex = /a\s*(?:(?<min_d>\d)?\s*-\s*(?<max_d>\d)?)?\s*(?<attrib_ref>\".+?\"\s*(?<attrib_ref_col>\[\s*\".+?\s*\])?)?\s*(?<precedent>\".+?\"\s*(?<precedent_col>\[\s*\".+?\s*\])?)\s*/g;
-              let aCond = {};
-              aCond.min_d = match.groups.min_d;
-              aCond.max_d = match.groups.max_d;
-              if(match.groups.attrib_ref) {
-                let refInd_val = checkBrack(i, j, 0, match.groups.attrib_ref, match.groups.attrib_ref_col);
+            if(theCond.match[0] == 'a') {
+              let groups = theCond.groups;
+              let aCond = {
+                min_d: groups.min_d,
+                max_d: groups.max_d
+              };
+              if(groups.attrib_ref) {
+                let refInd_val = checkBrack(i, j, 0, groups.attrib_ref, groups.attrib_ref_col);
                 if(refInd_val == -1) {
                   return;
                 }
@@ -451,14 +451,29 @@ function check() {
                 }
                 aCond.attrib_ref = refInd_val;
               }
-              let refInd_val = checkBrack(i, j, 0, match.groups.precedent, match.groups.precedent_col);
+              let refInd_val = checkBrack(i, j, 0, groups.precedent, groups.precedent_col);
               if(refInd_val == -1) {
                 return;
               }
-              if(refInd_val === -2) {
-                aCond.precedent_mediaRow = refInd_val;
+              aCond.precedent_is_att = refInd_val !== -2;
+              if(aCond.precedent_is_att) {
+                aCond.precedent = refInd_val;
               } else {
-                aCond.precedent_att = refInd_val;
+                for(let m = 1; m < values.length; m++) {
+                  for(let f = 0; f < values[m][nameInd].length; f++) {
+                    if(values[m][nameInd][f] == groups.precedent) {
+                      aCond.precedent = m;
+                      break;
+                    }
+                  }
+                  if(aCond.precedent!==undefined) {
+                    break;
+                  }
+                }
+                if(aCond.precedent===undefined) {
+                  inconsist_removing_elem(i, j, 0, `precedent "${groups.precedent}" at ${getAddress(i, j)} not found.`);
+                  return;
+                }
               }
               data[i].conditions.push(aCond);
             } else {
@@ -474,7 +489,7 @@ function check() {
     let valuesI = values[i][nameInd];
     for(let k = 0; k < valuesI.length; k++) {
       let val = valuesI[k];
-      const regexName = /a\s*(?:\"(?<val>.+?)\"\s*(?:\[\s*\"(?<columnTitle>.+?)\s*\])?)\s*/g;
+      const regexName = /\s*(?:\"(?<val>.+?)\"\s*(?:\[\s*\"(?<columnTitle>.+?)\s*\])?)\s*/g;
       let match = regexName.exec(val);
       let refInd_val;
       if(match !== null) {
@@ -484,26 +499,28 @@ function check() {
         }
         valuesI[k] = '"' + val + '"' + (match.groups.columnTitle===undefined?"":'["' + match.groups.columnTitle + '"]');
       }
-      if(refInd_val == -2) {
+      if(match === null || refInd_val === -2) {
         // check if the name is already used
         for (let r = 1; r <= i; r++) {
           for (let f = 0; f < values[r][nameInd].length; f++) {
             if ((r < i || f < k) && valuesI[k]==values[r][nameInd][k]) {
-              inconsist_replacing_elem(i, nameInd, k, findNewName(valuesI[k]), `name "${valuesI[k]} at ${getAddress(i, nameInd)} already at ${getAddress(r, nameInd)}`);
+              inconsist_replacing_elem(i, nameInd, k, findNewName(valuesI[k]), `name "${valuesI[k]}" at ${getAddress(i, nameInd)} already at ${getAddress(r, nameInd)}`);
               return;
             }
           }
         }
       } else {
         if(data[i].attributes.length) {
-          inconsist_removing_elem(i, f, 0, `there is an attribute at "${getAddress(i, f)} although the row references an attribute`);
+          inconsist_removing_elem(i, f, 0, `there is an attribute at "${getAddress(i, f)}" although the row references an attribute`);
           return;
         }
-        for(let r = 0; r < values.length; r++) {
-          for(let f = 0; f < data[r].attributes.length; f++) {
-            if(data[r].attributes[f] == refInd_val) {
-              for(let cond in data[i]) {
-                data[r][cond].concat(data[i][cond]);
+        for(let r = 1; r < values.length; r++) {
+          if(data[r] !== undefined) {
+            for(let f = 0; f < data[r].attributes.length; f++) {
+              if(data[r].attributes[f] == refInd_val) {
+                for(let cond in data[i]) {
+                  data[r][cond].concat(data[i][cond]);
+                }
               }
             }
           }
@@ -511,6 +528,11 @@ function check() {
         data[i] = undefined;
       }
     }
+  }
+  let cycle = findCycle(data);
+  if(cycle !== null) {
+    inconsist(cycle[0], 0, `Cycle detected: ${cycle.map(index => `${values[index][nameInd][0]} (${index})`).join(" -> ")}.`, []);
+    return;
   }
   return;
 
@@ -1626,9 +1648,167 @@ function addLineToFile(filePath, line) {
   });
 }
 
-app.get('/checkServer', (req, res) => {
-  // return a response to indicate the server is running
-  res.json({ status: 'Server is running' });
+function parseExpression(expr) {
+    // Replace '&&' with 'and' and '||' with 'or' to match JS syntax
+    expr = expr.replace(/&&/g, '&&').replace(/\|\|/g, '||');
+    const ast = acorn.parseExpressionAt(expr, 0);
+    return buildTree(ast);
+}
+
+function buildTree(node) {
+    if (node.type === 'LogicalExpression') { // Handles && and ||
+        const op = node.operator === '&&' ? '&&' : '||';
+        const root = new Node(op);
+        root.left = buildTree(node.left);
+        root.right = buildTree(node.right);
+        return root;
+    } else if (node.type === 'BinaryExpression') { // Handles comparisons like A == 1
+        return new Node(`${node.left.name} == ${node.right.value}`);
+    } else if (node.type === 'Identifier') {
+        return new Node(node.name);
+    } else if (node.type === 'Literal') {
+        return new Node(String(node.value));
+    } else {
+        throw new Error("Unsupported AST node.");
+    }
+}
+
+function findNecessarySubformulas(node) {
+    if (node.value === '&&') {
+        const left = findNecessarySubformulas(node.left);
+        const right = findNecessarySubformulas(node.right);
+        return left.concat(right);
+    } else if (node.value === '||') {
+        const left = findNecessarySubformulas(node.left);
+        const right = findNecessarySubformulas(node.right);
+        const common = left.filter(value => right.includes(value));
+        return common;
+    } else {
+        return [node.value];
+    }
+}
+
+function replaceWithSameWord(str) {
+  const replacements = {}; // Object to store replacements
+  const reverseReplacements = {}; // Object to store reverse mapping
+  let wordCounter = 1; // Counter to generate new words
+
+  function generateWord() {
+      return `word${wordCounter++}`; // Generates a new word like "word1", "word2", etc.
+  }
+
+  const regex = /a\s*(?:(?<min_d>\d)?\s*-\s*(?<max_d>\d)?)?\s*(?:(?:\"\s*(?<attrib_ref>.+?)\s*\")?\s*(?:\[\s*\"\s*(?<attrib_ref_col>.+?)\s*\"\s*\])?)?\s*(?:\"\s*(?<precedent>.+?)\s*\"\s*(?:\[\s*\"\s*(<precedent_col>.+?)\s*\"\s*\])?)\s*/g;
+  const replacedWithWords = str.replace(regex, (match, ...args) => {
+      const groups = args[args.length - 1]; // The last element in args array is the groups object
+
+      if (!replacements[match]) {
+          const newWord = generateWord();
+          replacements[match] = newWord;
+          reverseReplacements[newWord] = match; // Store the reverse mapping
+
+          // Store the reverse mapping along with the capturing groups
+          reverseReplacements[newWord] = {
+              match: match,
+              groups: {
+                  min_d: groups.min_d,
+                  max_d: groups.max_d,
+                  attrib_ref: groups.attrib_ref,
+                  attrib_ref_col: groups.attrib_ref_col,
+                  precedent: groups.precedent,
+                  precedent_col: groups.precedent_col
+              }
+          };
+      }
+      return replacements[match];
+  });
+
+  return { replacedWithWords, reverseReplacements };
+}
+
+function findCycle(elements) {
+  // Create an array to track the visitation state of each element:
+  // 0 = unvisited, 1 = visiting, 2 = visited
+  const visited = new Array(elements.length).fill(0);
+  const stack = []; // To keep track of the current path
+
+  // Helper function to perform DFS
+  function dfs(index) {
+      // If the element is already being visited, we've found a cycle
+      if (visited[index] === 1) {
+          const cycleStartIndex = stack.indexOf(index);
+          if (cycleStartIndex !== -1) {
+              // Return the cycle in order
+              return stack.slice(cycleStartIndex).concat(index);
+          }
+      }
+
+      // If the element has been fully visited, no cycle was found here
+      if (visited[index] === 2) return null;
+
+      // Mark the element as visiting and add to the stack
+      visited[index] = 1;
+      stack.push(index);
+
+      // Iterate over all the afterIndex entries
+      let afterIndexes = [];
+      if(elements[index] !== undefined) {
+        afterIndexes = elements[index].conditions;
+      }
+
+      for (let i = 0; i < afterIndexes.length; i++) {
+          const nextIndex = afterIndexes[i].precedent;
+
+          // Perform DFS on each index
+          if (nextIndex !== null && nextIndex !== undefined) {
+              const cycle = dfs(nextIndex);
+              if (cycle) return cycle;
+          }
+      }
+
+      // Mark the element as fully visited and remove from stack
+      visited[index] = 2;
+      stack.pop();
+
+      // No cycle was found
+      return null;
+  }
+
+  // Run DFS for each element
+  for (let i = 0; i < elements.length; i++) {
+      if (visited[i] === 0) {
+          const cycle = dfs(i);
+          if (cycle) {
+              return cycle; // Return the cycle with element ids
+          }
+      }
+  }
+
+  return null; // No cycles found
+}
+
+app.post('/test', (req, res) => {
+
+  // Example usage
+  const elements = [
+    { id: 1, afterIndex: [] }, // No dependencies
+    { id: 2, afterIndex: [{index: 5}] }, // Should come after element 1
+    { id: 3, afterIndex: [{index: 1}] }, // Should come after element 2
+    { id: 4, afterIndex: [{index: 2}, {index: 0}] }, // Should come after element 3 and 1
+    { id: 5, afterIndex: [{index: 3}] }, // Should come after element 4
+    { id: 6, afterIndex: [{index: 1}, {index: 4}] } // Should come after element 2 and 5
+  ];
+
+  console.log(findCycle(elements)); // Output: false (no cycle)
+  res.json("hey");
+});
+
+
+app.get('/health', (req, res) => {
+  res.status(200).send('Server is healthy');
+});
+
+app.listen(port, () => {
+  console.log(`Server running at http://localhost:${port}`);
 });
 
 // Endpoint to call JavaScript functions
@@ -1688,79 +1868,4 @@ app.post('/execute', (req, res) => {
     delete response[0]["listBoxList"];
   }
   res.json(response);
-});
-
-function parseExpression(expr) {
-    // Replace '&&' with 'and' and '||' with 'or' to match JS syntax
-    expr = expr.replace(/&&/g, '&&').replace(/\|\|/g, '||');
-    const ast = acorn.parseExpressionAt(expr, 0);
-    return buildTree(ast);
-}
-
-function buildTree(node) {
-    if (node.type === 'LogicalExpression') { // Handles && and ||
-        const op = node.operator === '&&' ? '&&' : '||';
-        const root = new Node(op);
-        root.left = buildTree(node.left);
-        root.right = buildTree(node.right);
-        return root;
-    } else if (node.type === 'BinaryExpression') { // Handles comparisons like A == 1
-        return new Node(`${node.left.name} == ${node.right.value}`);
-    } else if (node.type === 'Identifier') {
-        return new Node(node.name);
-    } else if (node.type === 'Literal') {
-        return new Node(String(node.value));
-    } else {
-        throw new Error("Unsupported AST node.");
-    }
-}
-
-function findNecessarySubformulas(node) {
-    if (node.value === '&&') {
-        const left = findNecessarySubformulas(node.left);
-        const right = findNecessarySubformulas(node.right);
-        return left.concat(right);
-    } else if (node.value === '||') {
-        const left = findNecessarySubformulas(node.left);
-        const right = findNecessarySubformulas(node.right);
-        const common = left.filter(value => right.includes(value));
-        return common;
-    } else {
-        return [node.value];
-    }
-}
-
-function replaceWithSameWord(str) {
-  const replacements = {}; // Object to store replacements
-  const reverseReplacements = {}; // Object to store reverse mapping
-  let wordCounter = 1; // Counter to generate new words
-
-  function generateWord() {
-      return `word${wordCounter++}`; // Generates a new word like "word1", "word2", etc.
-  }
-
-  const result = str.replace(regex, (match) => {
-      if (!replacements[match]) {
-          const newWord = generateWord();
-          replacements[match] = newWord;
-          reverseReplacements[newWord] = match; // Store the reverse mapping
-      }
-      return replacements[match];
-  });
-
-  return { result, reverseReplacements };
-}
-
-app.post('/test', (req, res) => {
-
-  res.json(result ? "Possible" : "Impossible");
-});
-
-
-app.get('/health', (req, res) => {
-  res.status(200).send('Server is healthy');
-});
-
-app.listen(port, () => {
-  console.log(`Server running at http://localhost:${port}`);
 });
