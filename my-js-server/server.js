@@ -5,6 +5,7 @@ const walk = require('acorn-walk');
 const { exec } = require('child_process');
 const app = express();
 const port = 3000;
+const regex = /\s*(?:a\s*(?!_\s*")(?<d1>-?\d+)?\s*_?\s*(?<d2>-?\d+)?\s*(?:(?:\"\s*(?<attrib_ref>.+?)\s*\")?\s*(?:\[\s*\"\s*(?<attrib_ref_col>.+?)\s*\"\s*\])?)?\s*(?:\"\s*(?<precedent>.+?)\s*\"\s*(?:\[\s*\"\s*(<precedent_col>.+?)\s*\"\s*\])?))|(?:p(?<position>-?\d+))\s*/g;
 // Middleware to parse JSON bodies
 app.use(express.json());
 
@@ -348,7 +349,7 @@ function check() {
   resolved[sheetCodeName] = false;
   let found;
   
-  data = [undefined];
+  data = [-1];
   var r;
 
   for (let i = 1; i < nbLineBef; i++) {
@@ -361,7 +362,7 @@ function check() {
           return;
         }
       }
-      data[i] = undefined;
+      data[i] = -1;
       continue;
     }
   }
@@ -369,6 +370,8 @@ function check() {
   attributes = [];
   let acc = 0;
   let accAttr = {};
+
+  // attributes
   for (let j = 0; j < colNumb; j++) {
     let colTitle = values0[sheetCodeName][0][j];
     if(colTitle !== null){
@@ -396,16 +399,18 @@ function check() {
           }
           if(attInd == attNames[j].length) {
             attNames[j].push(val);
-            attributes.push(0);
+            attributes.push([]);
             attInd += accAttr[j];
             acc+=1;
           }
           data[i].attributes.push(attInd);
-          attributes[attInd] += 1;
+          attributes[attInd].append(i);
         }
       }
     }
   }
+
+  // conditions
   for (let j = 0; j < colNumb; j++) {
     if (columnTypes[j] == allColumnTypes.CONDITIONS) {
       let colPattern = values[0][j];
@@ -485,6 +490,8 @@ function check() {
       }
     }
   }
+
+  //names
   for(let i = 1; i < nbLineBef; i++) {
     let valuesI = values[i][nameInd];
     for(let k = 0; k < valuesI.length; k++) {
@@ -515,7 +522,7 @@ function check() {
           return;
         }
         for(let r = 1; r < values.length; r++) {
-          if(data[r] !== undefined) {
+          if(!Number.isInteger(data[r])) {
             for(let f = 0; f < data[r].attributes.length; f++) {
               if(data[r].attributes[f] == refInd_val) {
                 for(let cond in data[i]) {
@@ -525,11 +532,56 @@ function check() {
             }
           }
         }
-        data[i] = undefined;
+        data[i] = refInd_val;
       }
     }
   }
-  let cycle = findCycle(data);
+
+  // apply conditions to attributes to all the rows having the attribute
+  for(let i = 1; i < nbLineBef; i++) {
+    if(!Number.isInteger(data[i])) {
+      for(let j = 0; j < data[i].conditions.length; j++) {
+        let cond = data[i].conditions[j];
+        let att = -1;
+        if(!cond.precedent_is_att) {
+          if(Number.isInteger(data[cond])) { 
+            att = data[cond];
+          }
+        } else {
+          att = cond.precedent;
+        }
+        if(att !== -1) {
+          for(let m of attributes[att]) {
+            cond.precedent = m;
+            data[i].conditions.push(cond);
+          }
+          data[i].conditions.splice(j, 1);
+        }
+      }
+    }
+  }
+
+  // change negative distances to positive distances
+  for(let i = 1; i < nbLineBef; i++) {
+    if(!Number.isInteger(data[i])) {
+      for(let j = 0; j < data[i].conditions.length; j++) {
+        let cond = data[i].conditions[j];
+        if(cond.max_d !== undefined && cond.max_d < 1) {
+          newCond.min_d = -cond.max_d;
+          if(cond.min_d === undefined) {
+            newCond.max_d = undefined;
+          } else {
+            newCond.max_d = -cond.min_d;
+          }
+          data[cond.precedent].conditions.push(cond);
+          data[i].conditions.splice(j, 1);
+        }
+      }
+    }
+  }
+
+  // check if there is a cycle
+  let cycle = findCycle(data.map(row => {conditions: row.conditions.filter(condition => condition.min_d !== undefined && condition.min_d > -1)}));
   if(cycle !== null) {
     inconsist(cycle[0], 0, `Cycle detected: ${cycle.map(index => `${values[index][nameInd][0]} (${index})`).join(" -> ")}.`, []);
     return;
@@ -1697,7 +1749,6 @@ function replaceWithSameWord(str) {
       return `word${wordCounter++}`; // Generates a new word like "word1", "word2", etc.
   }
 
-  const regex = /a\s*(?:(?<min_d>\d)?\s*-\s*(?<max_d>\d)?)?\s*(?:(?:\"\s*(?<attrib_ref>.+?)\s*\")?\s*(?:\[\s*\"\s*(?<attrib_ref_col>.+?)\s*\"\s*\])?)?\s*(?:\"\s*(?<precedent>.+?)\s*\"\s*(?:\[\s*\"\s*(<precedent_col>.+?)\s*\"\s*\])?)\s*/g;
   const replacedWithWords = str.replace(regex, (match, ...args) => {
       const groups = args[args.length - 1]; // The last element in args array is the groups object
 
@@ -1707,15 +1758,21 @@ function replaceWithSameWord(str) {
           reverseReplacements[newWord] = match; // Store the reverse mapping
 
           // Store the reverse mapping along with the capturing groups
+          let min_d = groups.d1;
+          let max_d = groups.d1;
+          if(groups.d2 !== undefined) {
+            max_d = groups.d2;
+          }
           reverseReplacements[newWord] = {
               match: match,
               groups: {
-                  min_d: groups.min_d,
-                  max_d: groups.max_d,
+                  min_d: min_d,
+                  max_d: max_d,
                   attrib_ref: groups.attrib_ref,
                   attrib_ref_col: groups.attrib_ref_col,
                   precedent: groups.precedent,
-                  precedent_col: groups.precedent_col
+                  precedent_col: groups.precedent_col,
+                  position: groups.position
               }
           };
       }
