@@ -5,7 +5,7 @@ const walk = require('acorn-walk');
 const { exec } = require('child_process');
 const app = express();
 const port = 3000;
-const regex = /\s*(?:a\s*(?!_\s*")(?<d1>-?\d+)?\s*_?\s*(?<d2>-?\d+)?\s*(?:(?:\"\s*(?<attrib_ref>.+?)\s*\")?\s*(?:\[\s*\"\s*(?<attrib_ref_col>.+?)\s*\"\s*\])?)?\s*(?:\"\s*(?<precedent>.+?)\s*\"\s*(?:\[\s*\"\s*(<precedent_col>.+?)\s*\"\s*\])?))|(?:p(?<position>-?\d+))\s*/g;
+const regex = /(?:a\s*(?!_\s*[^\d\s-]*$)(?<d1>-?\d+)?\s*_?\s*(?<d2>-?\d+)?\s*(?:\s*"\s*(?<attrib_ref>[^\[\]]+)\s*"\s*(?:\[\s*"\s*(?<attrib_ref_col>[^\[\]]+)\s*"\s*\])?)?\s*"\s*(?<precedent>[^\[\]]+)\s*"\s*(?:\[\s*"\s*(?<precedent_col>[^\[\]]+)\s*"\s*\])?(?<isAny>\(any\))?)|(?:p(?<position>-?\d+))/g;
 // Middleware to parse JSON bodies
 app.use(express.json());
 
@@ -352,8 +352,9 @@ function check() {
   data = [-1];
   var r;
 
+  // initialize data
   for (let i = 1; i < nbLineBef; i++) {
-    data.push({attributes: [], conditions: []});
+    data.push({attributes: [], ulteriors: [], otherConditions: [], posteriors: 0, minPos: 0});
     // check if a non-empty row has no name
     if(!values[i][nameInd].length) {
       for (let j = 0; j < values[i].length; j++) {
@@ -432,33 +433,46 @@ function check() {
           let necessarySubformulas;
           try{
             let tree = parseExpression(replacedWithWords);
-            necessarySubformulas = findNecessarySubformulas(tree);
+            necessarySubformulas = findSubformulas(tree);
           } catch(e) {
             inconsist_removing_elem(i, j, 0, `incorrect condition.`);
             return;
           }
-          for(let r = 0; r < necessarySubformulas.length; r++) {
-            let theCond = reverseReplacements[necessarySubformulas[r]];
+          const restStrings = necessarySubformulas.rest.map(nodeToString).filter(x => x !== undefined);
+          const result = restStrings.join(' && ');
+          data[i].otherConditions.push(result);
+          for(let r = 0; r < necessarySubformulas.necessary.length; r++) {
+            let theCond = reverseReplacements[necessarySubformulas.necessary[r]];
+            let aCond = {
+              min_d: groups.min_d,
+              max_d: groups.max_d
+            };
             if(theCond.match[0] == 'a') {
               let groups = theCond.groups;
-              let aCond = {
-                min_d: groups.min_d,
-                max_d: groups.max_d
-              };
+              if(max_d !== undefined) {
+                if(min_d > max_d) {
+                  inconsist(i, j, `min_d greater than max_d.`, []);
+                  return -1;
+                }
+                if(min_d === 0 && max_d === 0) {
+                  inconsist(i, j, `min_d and max_d are both 0.`, []);
+                  return -1;
+                }
+              }
               if(groups.attrib_ref) {
                 let refInd_val = checkBrack(i, j, 0, groups.attrib_ref, groups.attrib_ref_col);
                 if(refInd_val == -1) {
-                  return;
+                  return -1;
                 }
                 if(refInd_val == -2) {
                   inconsist_removing_elem(i, j, k, `attribute "${val}" at ${getAddress(i, j)} not found.`);
-                  return;
+                  return -1;
                 }
                 aCond.attrib_ref = refInd_val;
               }
               let refInd_val = checkBrack(i, j, 0, groups.precedent, groups.precedent_col);
               if(refInd_val == -1) {
-                return;
+                return -1;
               }
               aCond.precedent_is_att = refInd_val !== -2;
               if(aCond.precedent_is_att) {
@@ -477,13 +491,21 @@ function check() {
                 }
                 if(aCond.precedent===undefined) {
                   inconsist_removing_elem(i, j, 0, `precedent "${groups.precedent}" at ${getAddress(i, j)} not found.`);
-                  return;
+                  return -1;
                 }
               }
-              data[i].conditions.push(aCond);
+              aCond.isAny = groups.isAny;
+              if()
+            } else if(theCond.match[0] == 'p') {
+              
             } else {
               inconsist_removing_elem(i, j, 0, `incorrect condition.`);
-              return;
+              return -1;
+            }
+            if(necessary) {
+              data[i].before.push(aCond);
+            } else {
+              data[i].otherConditions.push(aCond);
             }
           }
         }
@@ -491,12 +513,12 @@ function check() {
     }
   }
 
-  //names
+  // names
   for(let i = 1; i < nbLineBef; i++) {
     let valuesI = values[i][nameInd];
     for(let k = 0; k < valuesI.length; k++) {
       let val = valuesI[k];
-      const regexName = /\s*(?:\"(?<val>.+?)\"\s*(?:\[\s*\"(?<columnTitle>.+?)\s*\])?)\s*/g;
+      const regexName = /(?<val>[^\[\]]+)(?:\s*\[\s*\"(?<columnTitle>[^\[\]]+)\s*\])?/g;
       let match = regexName.exec(val);
       let refInd_val;
       if(match !== null) {
@@ -525,9 +547,8 @@ function check() {
           if(!Number.isInteger(data[r])) {
             for(let f = 0; f < data[r].attributes.length; f++) {
               if(data[r].attributes[f] == refInd_val) {
-                for(let cond in data[i]) {
-                  data[r][cond].concat(data[i][cond]);
-                }
+                data[r].attributes.concat(data[i].attributes);
+                data[r].conditions.concat(data[i].conditions);
               }
             }
           }
@@ -537,7 +558,7 @@ function check() {
     }
   }
 
-  // apply conditions to attributes to all the rows having the attribute
+  // apply conditions to an attribute to all the rows having the attribute
   for(let i = 1; i < nbLineBef; i++) {
     if(!Number.isInteger(data[i])) {
       for(let j = 0; j < data[i].conditions.length; j++) {
@@ -567,14 +588,17 @@ function check() {
       for(let j = 0; j < data[i].conditions.length; j++) {
         let cond = data[i].conditions[j];
         if(cond.max_d !== undefined && cond.max_d < 1) {
-          newCond.min_d = -cond.max_d;
+          cond.min_d = -cond.max_d;
           if(cond.min_d === undefined) {
-            newCond.max_d = undefined;
+            cond.max_d = undefined;
           } else {
-            newCond.max_d = -cond.min_d;
+            cond.max_d = -cond.min_d;
           }
           data[cond.precedent].conditions.push(cond);
           data[i].conditions.splice(j, 1);
+        }
+        if(cond.min_d > -1) {
+          data[i].minPos = Math.max(data[i].minPos, cond.min_d);
         }
       }
     }
@@ -1725,7 +1749,7 @@ function buildTree(node) {
     }
 }
 
-function findNecessarySubformulas(node) {
+function findNecessarySubformulas0(node) {
     if (node.value === '&&') {
         const left = findNecessarySubformulas(node.left);
         const right = findNecessarySubformulas(node.right);
@@ -1740,20 +1764,43 @@ function findNecessarySubformulas(node) {
     }
 }
 
+function findSubformulas(node) {
+  if (node.value === '&&') {
+      const left = findSubformulas(node.left);
+      const right = findSubformulas(node.right);
+      return {
+          necessary: left.necessary.concat(right.necessary),
+          rest: left.rest.concat(right.rest)
+      };
+  } else if (node.value === '||') {
+      const left = findSubformulas(node.left);
+      const right = findSubformulas(node.right);
+      const common = left.necessary.filter(value => right.necessary.includes(value));
+      const restLeft = left.necessary.filter(value => !common.includes(value)).concat(left.rest);
+      const restRight = right.necessary.filter(value => !common.includes(value)).concat(right.rest);
+      return {
+          necessary: common,
+          rest: [node].concat(restLeft).concat(restRight)
+      };
+  } else {
+      return {
+          necessary: [node.value],
+          rest: []
+      };
+  }
+}
+
 function replaceWithSameWord(str) {
   const replacements = {}; // Object to store replacements
   const reverseReplacements = {}; // Object to store reverse mapping
   let wordCounter = 1; // Counter to generate new words
 
-  function generateWord() {
-      return `word${wordCounter++}`; // Generates a new word like "word1", "word2", etc.
-  }
 
   const replacedWithWords = str.replace(regex, (match, ...args) => {
       const groups = args[args.length - 1]; // The last element in args array is the groups object
 
       if (!replacements[match]) {
-          const newWord = generateWord();
+          const newWord = `word${wordCounter++}`;
           replacements[match] = newWord;
           reverseReplacements[newWord] = match; // Store the reverse mapping
 
@@ -1772,7 +1819,8 @@ function replaceWithSameWord(str) {
                   attrib_ref_col: groups.attrib_ref_col,
                   precedent: groups.precedent,
                   precedent_col: groups.precedent_col,
-                  position: groups.position
+                  position: groups.position,
+                  isAny: groups.isAny
               }
           };
       }
@@ -1813,7 +1861,7 @@ function findCycle(elements) {
       }
 
       for (let i = 0; i < afterIndexes.length; i++) {
-          const nextIndex = afterIndexes[i].precedent;
+          const nextIndex = afterIndexes[i].ulterior;
 
           // Perform DFS on each index
           if (nextIndex !== null && nextIndex !== undefined) {
@@ -1832,7 +1880,7 @@ function findCycle(elements) {
 
   // Run DFS for each element
   for (let i = 0; i < elements.length; i++) {
-      if (visited[i] === 0) {
+      if (visited[i] === 0 && elements[i].conditions.length === 0) {
           const cycle = dfs(i);
           if (cycle) {
               return cycle; // Return the cycle with element ids
@@ -1844,19 +1892,24 @@ function findCycle(elements) {
 }
 
 app.post('/test', (req, res) => {
+  let tree = parseExpression("A && (B || C)");
+  let result0 = findSubformulas(tree);
+  
+  const restStrings = result0.rest.map(nodeToString).filter(x => x !== undefined);
+  const result = restStrings.join(' && ');
 
-  // Example usage
-  const elements = [
-    { id: 1, afterIndex: [] }, // No dependencies
-    { id: 2, afterIndex: [{index: 5}] }, // Should come after element 1
-    { id: 3, afterIndex: [{index: 1}] }, // Should come after element 2
-    { id: 4, afterIndex: [{index: 2}, {index: 0}] }, // Should come after element 3 and 1
-    { id: 5, afterIndex: [{index: 3}] }, // Should come after element 4
-    { id: 6, afterIndex: [{index: 1}, {index: 4}] } // Should come after element 2 and 5
-  ];
+  // // Example usage
+  // const elements = [
+  //   { id: 0, conditions: [] }, // No dependencies
+  //   { id: 1, conditions: [{ulterior: 5, min_d: 1}] }, // Should come after element 5
+  //   { id: 2, conditions: [] }, // No dependencies
+  //   { id: 3, conditions: [{ulterior: 2, min_d: 1}, {ulterior: 0, min_d: 1}] }, // Should come after element 2 and 0
+  //   { id: 4, conditions: [{ulterior: 3, min_d: 1}] }, // Should come after element 3
+  //   { id: 5, conditions: [{ulterior: 4, min_d: 2}] } // Should come after element 4
+  // ];
 
-  console.log(findCycle(elements)); // Output: false (no cycle)
-  res.json("hey");
+  // let result = findCycle(elements); // Output: false (no cycle)
+  res.json(result);
 });
 
 
