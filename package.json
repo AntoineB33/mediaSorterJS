@@ -1,6 +1,9 @@
 {
   "dependencies": {
     "acorn": "^8.12.1",
-    "acorn-walk": "^8.3.3"
+    "acorn-walk": "^8.3.3",
+    "express": "^4.19.2",
+    "logic-solver": "^2.0.1",
+    "mathjs": "^13.1.1"
   }
 }
