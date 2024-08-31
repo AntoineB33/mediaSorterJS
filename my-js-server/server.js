@@ -1,10 +1,8 @@
 const express = require('express');
 const fs = require('fs');
-const acorn = require('acorn');
-const walk = require('acorn-walk');
 const { exec } = require('child_process');
-const booleanAlgebra = require('boolean-algebra');
-const math = require('mathjs');
+const path = require('path');
+const abcPath = path.resolve('../abc-master/abc-master/abc');
 const app = express();
 const port = 3000;
 // Middleware to parse JSON bodies
@@ -161,7 +159,7 @@ function handleSelectLinks() {
   }
 }
 
-function handleChange(updates) {
+async function handleChange(updates) {
   nbLineBef = values.length;
   if(nbLineBef) {
     colNumb = values[0].length;
@@ -292,7 +290,7 @@ function handleChange(updates) {
 
 
 
-  check();
+  await check();
   oldValues.splice(indOldValues, oldValues.length - 1 - indOldValues);
   oldValues.push(values);
   if(oldVersionsMaxNb < oldValues.length) {
@@ -350,7 +348,7 @@ function formulaToList(formula, reverseReplacements) {
   if (formula.isVar()) {
       return formula.name; // Return the variable name as a string
   } else if (formula.isNot()) {
-      return ["not", formulaToList(formula.formula, reverseReplacements)]; // Negation with nested formula
+      return [0, "not", formulaToList(formula.formula, reverseReplacements)]; // Negation with nested formula
   } else if (formula.isAnd()) {
       return ["and", ...formula.terms.map(term => formulaToList(term, reverseReplacements))]; // Conjunction of terms
   } else if (formula.isOr()) {
@@ -364,7 +362,7 @@ function formulaToList(formula, reverseReplacements) {
   }
 }
 
-function check() {
+async function check() {
   resolved[sheetCodeName] = false;
   let found;
   
@@ -373,7 +371,7 @@ function check() {
 
   // initialize data
   for (let i = 1; i < nbLineBef; i++) {
-    data.push({attributes: [], ulteriors: [], otherConditions: [], posteriors: 0, minPos: 0});
+    data.push({attributes: [], conditions: [], ulteriors: [], minPos: 0});
     // check if a non-empty row has no name
     if(!values[i][nameInd].length) {
       for (let j = 0; j < values[i].length; j++) {
@@ -453,95 +451,105 @@ function check() {
       }
     }
 
-    let { replacedWithWords, reverseReplacements } = replaceWithSameWord(formula);
-    const regex = /word\d\s*word\d/g;
-    let match = replacedWithWords.match(regex);
-    if(match !== null) {
+    let replacedWithWords
+    let reverseReplacements
+    try{
+      ({replacedWithWords, reverseReplacements} = replaceWithSameWord(formula));
+    } catch(error) {
+      inconsist(i, j, error.message, []);
+      return
+    }
+    
+    let errorOccurred = false;
+    let simplified = await new Promise((resolve, reject) => {
+      let options = {
+        args: [replacedWithWords]  // using Python syntax directly
+      };
+
+      PythonShell.run('simplify_expression.py', options, function (err, results) {
+        if (err) {
+          errorOccurred = true;
+          reject(err);  // Rejecting the promise on error
+        } else {
+          resolve(results[0]);
+        }
+      });
+    });
+    if (errorOccurred) {
       inconsist_removing_elem(i, j, 0, `incorrect condition.`);
       return -1;
     }
 
-    // Example usage
-    const expr = replacedWithWords.replace(/(word\d+)/g, 'solver.var("$1")');
-
-    // Simplify the expression
-    const simplified = solver.simplify(expr);
-
     
-    const listRepresentation = formulaToList(simplified, reverseReplacements);
-
+    let stack = [...simplified];
+    let output = [];
     
-    let stack = [simplified];
-
     while (stack.length > 0) {
-        let current = stack.pop();
-
-        // Apply the modification function to the current term
-        if (current.isVar()) {
-          // Process the current node (sub-formula)
-          let aCond = {};
-          let groups = reverseReplacements[current.name];
-          if(groups.after) {
-            aCond.min_d = groups.min_d;
-            aCond.max_d = groups.max_d;
-            if(max_d !== undefined) {
-              if(min_d > max_d) {
-                inconsist(i, j, `min_d greater than max_d.`, []);
-                return -1;
-              }
-              if(min_d === 0 && max_d === 0) {
-                inconsist(i, j, `min_d and max_d are both 0.`, []);
-                return -1;
-              }
+      let current = stack.shift();
+      
+      if (Array.isArray(current)) {
+        // Push the current array elements back to the stack, maintaining order
+        stack.unshift(...current);
+      } else {
+        // Process the non-array element (assuming it needs to be stored in the output)
+        let aCond = {};
+        let groups = reverseReplacements[current];
+        if(groups.after) {
+          aCond.min_d = groups.min_d;
+          aCond.max_d = groups.max_d;
+          if(aCond.max_d !== undefined) {
+            if(aCond.min_d > aCond.max_d) {
+              inconsist(i, j, `min_d greater than max_d.`, []);
+              return -1;
             }
-            if(groups.attrib_ref !== undefined) {
-              let refInd_val = checkBrack(i, j, 0, groups.attrib_ref, groups.attrib_ref_col);
-              if(refInd_val == -1) {
-                return -1;
-              }
-              if(refInd_val == -2) {
-                inconsist_removing_elem(i, j, k, `attribute "${val}" at ${getAddress(i, j)} not found.`);
-                return -1;
-              }
-              groups.attrib_ref = refInd_val;
+            if(aCond.min_d === 0 && aCond.max_d === 0) {
+              inconsist(i, j, `min_d and max_d are both 0.`, []);
+              return -1;
             }
-            let refInd_val = checkBrack(i, j, 0, groups.precedent, groups.precedent_col);
+          }
+          if(groups.attrib_ref !== undefined) {
+            let refInd_val = checkBrack(i, j, 0, groups.attrib_ref, groups.attrib_ref_col);
             if(refInd_val == -1) {
               return -1;
             }
-            groups.precedent_is_att = refInd_val !== -2;
-            if(groups.precedent_is_att) {
-              groups.precedent = refInd_val;
-            } else {
-              let found = false;
-              for(let m = 1; m < values.length; m++) {
-                for(let f = 0; f < values[m][nameInd].length; f++) {
-                  if(values[m][nameInd][f] == groups.precedent) {
-                    groups.precedent = m;
-                    found = true;
-                    break;
-                  }
-                }
-                if(found) {
+            if(refInd_val == -2) {
+              inconsist_removing_elem(i, j, k, `attribute "${val}" at ${getAddress(i, j)} not found.`);
+              return -1;
+            }
+            groups.attrib_ref = refInd_val;
+          }
+          let refInd_val = checkBrack(i, j, 0, groups.precedent, groups.precedent_col);
+          if(refInd_val == -1) {
+            return -1;
+          }
+          groups.precedent_is_att = refInd_val !== -2;
+          if(groups.precedent_is_att) {
+            groups.precedent = refInd_val;
+          } else {
+            let found = false;
+            for(let m = 1; m < values.length; m++) {
+              for(let f = 0; f < values[m][nameInd].length; f++) {
+                if(values[m][nameInd][f] == groups.precedent) {
+                  groups.precedent = m;
+                  found = true;
                   break;
                 }
               }
-              if(!found) {
-                inconsist_removing_elem(i, j, 0, `precedent "${groups.precedent}" at ${getAddress(i, j)} not found.`);
-                return -1;
+              if(found) {
+                break;
               }
             }
-          }
-          data[i].conditions.push(groups);
-        } else if (current.isNot()) {
-            stack.push(current.formula);
-        } else if (current.isAnd() || current.isOr()) {
-            for (let term of current.terms) {
-                stack.push(term);
+            if(!found) {
+              inconsist_removing_elem(i, j, 0, `precedent "${groups.precedent}" at ${getAddress(i, j)} not found.`);
+              return -1;
             }
+          }
         }
+        output.push(current);
+      }
     }
   }
+  data[i].conditions = output;
 
   // names
   for(let i = 1; i < nbLineBef; i++) {
@@ -1665,7 +1673,7 @@ function dataGeneratorSub() {
 
 }
 
-function renameSymbol(oldValue, newValue) {
+async function renameSymbol(oldValue, newValue) {
   if(!resolved[sheetCodeName]) {
     return -1;
   }
@@ -1704,7 +1712,7 @@ function renameSymbol(oldValue, newValue) {
   }
   correct();
   response.push({ "Renamings": [`renamed (${nbRen})`] });
-  check();
+  await check();
 }
 
 function handleoldNameInputClick() {
@@ -1720,21 +1728,21 @@ function handleoldNameInputClick() {
   response.push({ "newNameInput": [values[rowId][0].join("; ")] });
 }
 
-function ctrlZ() {
+async function ctrlZ() {
   if (indOldValues > 0) {
     indOldValues--;
     values = oldValues[indOldValues];
     correct();
-    check();
+    await check();
   }
 }
 
-function ctrlY() {
+async function ctrlY() {
   if (indOldValues < oldValues.length - 1) {
     indOldValues++;
     values = oldValues[indOldValues];
     correct();
-    check();
+    await check();
   }
 }
 
@@ -1750,31 +1758,6 @@ function addLineToFile(filePath, line) {
           console.log('Line added to file successfully.');
       }
   });
-}
-
-function parseExpression(expr) {
-    // Replace '&&' with 'and' and '||' with 'or' to match JS syntax
-    expr = expr.replace(/&&/g, '&&').replace(/\|\|/g, '||');
-    const ast = acorn.parseExpressionAt(expr, 0);
-    return buildTree(ast);
-}
-
-function buildTree(node) {
-    if (node.type === 'LogicalExpression') { // Handles && and ||
-        const op = node.operator === '&&' ? '&&' : '||';
-        const root = new Node(op);
-        root.left = buildTree(node.left);
-        root.right = buildTree(node.right);
-        return root;
-    } else if (node.type === 'BinaryExpression') { // Handles comparisons like A == 1
-        return new Node(`${node.left.name} == ${node.right.value}`);
-    } else if (node.type === 'Identifier') {
-        return new Node(node.name);
-    } else if (node.type === 'Literal') {
-        return new Node(String(node.value));
-    } else {
-        throw new Error("Unsupported AST node.");
-    }
 }
 
 function findNecessarySubformulas0(node) {
@@ -1823,29 +1806,42 @@ function replaceWithSameWord(str) {
   const reverseReplacements = {}; // Object to store reverse mapping
   let wordCounter = 1; // Counter to generate new words
 
-  const regex = /(?<after>a\s*(?!_\s*[^\d\s-]*$)(?<min_d>-?\d+)?\s*_?\s*(?<max_d>-?\d+)?\s*(?:\s*"\s*(?<attrib_ref>[^\[\]]+?)\s*"\s*(?:\[\s*"\s*(?<attrib_ref_col>[^\[\]]+?)\s*"\s*\])?)?\s*"\s*(?<precedent>[^\[\]]+?)\s*"\s*(?:\[\s*"\s*(?<precedent_col>[^\[\]]+)\s*"\s*\])?(?<isAny>\(any\))?)|(?:p(?<position>-?\d+))/g;
-  const replacedWithWords = str.replace(regex, (match, ...args) => {
-      const groups = args[args.length - 1]; // The last element in args array is the groups object
-
-      if (!replacements[match]) {
-          const newWord = `word${wordCounter++}`;
-          replacements[match] = newWord;
-
-          // Store the reverse mapping along with the capturing groups
-          groups.max_d = groups.min_d;
-          if(groups.d2 !== undefined) {
-            groups.max_d = groups.max_d;
-          }
-          reverseReplacements[newWord] = {};
-          
-          // Loop through each key in the groups object and add it to reverseReplacements[newWord].groups
-          for (let key in groups) {
-              if (groups.hasOwnProperty(key)) {
-                  reverseReplacements[newWord][key] = groups[key];
-              }
-          }
+  const trimmedResult  = str.split(/(\s*&&\s*|\s*\|\|\s*|\s*!\s*|\s*\(\s*|\s*\)\s*)/).filter(Boolean);
+  const operators = new Set(["&&", "||", "!", "(", ")"]);
+  
+  const nameRow = "[^\[\]&&||!]+?";
+  let regex = /(?<after>a\s*(?!_\s*[^\d\s-]*$)(?<min_d>-?\d+)?\s*_?\s*(?<max_d>-?\d+)?\s*(?:\s*"\s*(?<attrib_ref>nameRow)\s*"\s*(?:\[\s*"\s*(?<attrib_ref_col>nameRow)\s*"\s*\])?)?\s*"\s*(?<precedent>nameRow)\s*"\s*(?:\[\s*"\s*(?<precedent_col>[^\[\]]+)\s*"\s*\])?(?<isAny>\(any\))?)|(?:p(?<position>-?\d+))/g;
+  regex = regex.replace(/nameRow/g, nameRow);
+  const replacedWithWords = trimmedResult.forEach(item => {
+    if (!operators.has(item)) {
+      const match = str.match(regex);
+      if(!match) {
+        throw new Error("incorrect condition.");
       }
-      return replacements[match];
+      const groups = match.groups; // The last element in args array is the groups object
+
+      if (!replacements[match[0]]) {
+        const newWord = `word${wordCounter++}`;
+        replacements[match[0]] = newWord;
+
+        // Store the reverse mapping along with the capturing groups
+        groups.max_d = groups.min_d;
+        if(groups.d2 !== undefined) {
+          groups.max_d = groups.max_d;
+        }
+        reverseReplacements[newWord] = {};
+        
+        // Loop through each key in the groups object and add it to reverseReplacements[newWord].groups
+        for (let key in groups) {
+            if (groups.hasOwnProperty(key)) {
+                reverseReplacements[newWord][key] = groups[key];
+            }
+        }
+      }
+      return replacements[match[0]];
+    } else {
+      return item;
+    }
   });
 
   return { replacedWithWords, reverseReplacements };
@@ -1921,7 +1917,7 @@ app.listen(port, () => {
 });
 
 // Endpoint to call JavaScript functions
-app.post('/execute', (req, res) => {
+app.post('/execute', async (req, res) => {
   const timestamp = req.body.timestamp;
   
   // Write the timestamp to the received.txt file
@@ -1942,7 +1938,7 @@ app.post('/execute', (req, res) => {
   let body = req.body;
   const funcName = body.functionName;
   if (funcName === 'handleChange') {
-    handleChange(body.changes);
+    await handleChange(body.changes);
   } else if (funcName === 'selectionChange') {
     selectedCells[sheetCodeName] = body.selection;
     handleSelectLinks();
@@ -1950,7 +1946,7 @@ app.post('/execute', (req, res) => {
     sheetCodeName = body.sheetCodeName;
     headerColors = body.headerColors;
     values = values0[sheetCodeName].map(r => r.map(c => c===null?[]:c.toString().split(';').map(k => k.trim().toLowerCase()).filter(k => k)));
-    handleChange([]);
+    await handleChange([]);
   } else if (funcName == "dataGeneratorSub") {
     dataGeneratorSub();
   } else if (funcName == "renameSymbol") {
@@ -2001,19 +1997,123 @@ function simplifyExpression(expression, callback) {
   });
 }
 
-app.post('/test', (req, res) => {
+
+const jsep = require('jsep');
+
+function extractLinkedTerms(formula) {
+  // Parse the formula into an AST
+  const ast = jsep(formula);
+
+  const linkedTerms = new Set();
+
+  function traverse(node) {
+      if (node.type === 'BinaryExpression') {
+          // Traverse both sides of the binary expression
+          traverse(node.left);
+          traverse(node.right);
+      } else if (node.type === 'UnaryExpression') {
+          // If it's a 'not' expression, skip it
+          // We don't want to add negated terms
+          if (node.operator !== 'not') {
+              traverse(node.argument);
+          }
+      } else if (node.type === 'Identifier') {
+          // Add the term to the set
+          linkedTerms.add(node.name);
+      }
+  }
+
+  // Start traversal from the root of the AST
+  traverse(ast);
+
+  return Array.from(linkedTerms);
+}
+
+const { PythonShell } = require('python-shell');
+const math = require('mathjs');
+
+// Helper functions to evaluate logical expressions
+function and(a, b) {
+  return a && b;
+}
+
+function or(a, b) {
+  return a || b;
+}
+
+function not(a) {
+  return !a;
+}
+
+// Define the logical expression
+function expression(word1, word2, word3) {
+  return and(word1, or(and(word1, not(word3)), word2));
+}
+
+// Function to identify terms directly linked to the result
+function getLinkedTerms() {
+  const terms = [];
+
+  const word1 = true;  // placeholder value
+  const word2 = true;  // placeholder value
+  const word3 = false; // placeholder value
+
+  const result = expression(word1, word2, word3);
+
+  if (expression(false, word2, word3) !== result) terms.push('word1');
+  if (expression(word1, false, word3) !== result) terms.push('word2');
+  if (expression(word1, word2, true) !== result) terms.push('word3');
+
+  return terms;
+}
+
+
+
+
+
+function simplifyBoolean(expression) {
+  // Remove whitespace
+  expression = expression.replace(/\s+/g, '');
+
+  // Simplification rules
+  expression = expression.replace(/!\(true\)/g, 'false');
+  expression = expression.replace(/!\(false\)/g, 'true');
+  expression = expression.replace(/\(true&&(.+?)\)/g, '$1');
+  expression = expression.replace(/\((.+?)&&true\)/g, '$1');
+  expression = expression.replace(/\(false&&(.+?)\)/g, 'false');
+  expression = expression.replace(/\((.+?)&&false\)/g, 'false');
+  expression = expression.replace(/\(true\|\|(.+?)\)/g, 'true');
+  expression = expression.replace(/\((.+?)\|\|true\)/g, 'true');
+  expression = expression.replace(/\(false\|\|(.+?)\)/g, '$1');
+  expression = expression.replace(/\((.+?)\|\|false\)/g, '$1');
+
+  // Additional simplification for nested expressions
+  while (/\([^()]*\)/.test(expression)) {
+      expression = expression.replace(/\(([^()]+)\)/g, (match, subExpr) => simplifyBoolean(subExpr));
+  }
+
+  return expression;
+}
+
+app.post('/test', async (req, res) => {
   // Simplifying a logic expression
   // const expr = 'not(a and b) or (not(b) and not(b))';
-  
-  
-  simplifyExpression(expression, (simplifiedExpr, error) => {
-    if (error) {
-        res.status(500).send({ error });
-    } else {
-        res.json({ simplified: simplifiedExpr });
-    }
-  });
+  // let expression = "a && !b || a";
 
-  // let result = findCycle(elements); // Output: false (no cycle)
+
+  // // Output the result
+  // const linkedTerms = getLinkedTerms();
+  // console.log("Terms directly linked to the result:", linkedTerms);
+
+
+
+
+    
+  // Example usage:
+  let expression = 'a || (c && b)';
+  let simplifiedExpression = simplifyBoolean(expression);
+  console.log(simplifiedExpression);
+
+
   res.json("result");
 });
