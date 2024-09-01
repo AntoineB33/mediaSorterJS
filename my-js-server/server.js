@@ -2069,50 +2069,18 @@ function getLinkedTerms() {
 
 
 
-
-
-function simplifyBoolean(expression) {
-  // Remove whitespace
-  expression = expression.replace(/\s+/g, '');
-
-  // Simplification rules
-  expression = expression.replace(/!\(true\)/g, 'false');
-  expression = expression.replace(/!\(false\)/g, 'true');
-  expression = expression.replace(/\(true&&(.+?)\)/g, '$1');
-  expression = expression.replace(/\((.+?)&&true\)/g, '$1');
-  expression = expression.replace(/\(false&&(.+?)\)/g, 'false');
-  expression = expression.replace(/\((.+?)&&false\)/g, 'false');
-  expression = expression.replace(/\(true\|\|(.+?)\)/g, 'true');
-  expression = expression.replace(/\((.+?)\|\|true\)/g, 'true');
-  expression = expression.replace(/\(false\|\|(.+?)\)/g, '$1');
-  expression = expression.replace(/\((.+?)\|\|false\)/g, '$1');
-
-  // Additional simplification for nested expressions
-  while (/\([^()]*\)/.test(expression)) {
-      expression = expression.replace(/\(([^()]+)\)/g, (match, subExpr) => simplifyBoolean(subExpr));
-  }
-
-  return expression;
-}
-
 app.post('/test', async (req, res) => {
   // Simplifying a logic expression
   // const expr = 'not(a and b) or (not(b) and not(b))';
   // let expression = "a && !b || a";
-
-
-  // // Output the result
-  // const linkedTerms = getLinkedTerms();
-  // console.log("Terms directly linked to the result:", linkedTerms);
-
-
-
-
-    
+  
   // Example usage:
-  let expression = 'a || (c && b)';
-  let simplifiedExpression = simplifyBoolean(expression);
-  console.log(simplifiedExpression);
+  let expression = "!(A | !A) & (B | !!C)";
+  let simplified = simplifyExpression(expression);
+  console.log(simplified);
+  expression = "A & !B | A";
+  simplified = simplifyExpression(expression);
+  console.log(simplified);
 
 
   res.json("result");
