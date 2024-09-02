@@ -1,17 +1,26 @@
-from sympy import symbols, And, Or, Not, simplify
+import sympy as sp
 
-# Define the symbolic variables
-word1, word2, word3 = symbols('word1 word2 word3')
+def find_false_terms(expression_str):
+    # Convert the string expression into a sympy logical expression
+    expression = sp.sympify(expression_str)
+    
+    # Find the variables in the expression
+    variables = expression.free_symbols
+    
+    # Prepare a dictionary to store whether setting each variable to False makes the expression False
+    false_terms = []
+    
+    for var in variables:
+        # Substitute the variable with False in the expression
+        test_expr = expression.subs(var, False)
+        
+        # Check if the whole expression becomes False
+        if test_expr == False:
+            false_terms.append(str(var))
+    
+    return false_terms
 
-# Define the logical expression
-expression = And(word1, Or(And(word2, Not(word3)), word2))
-
-# Simplify the expression
-simplified_expression = simplify(expression)
-
-# Print the simplified expression
-print("Simplified Expression:", simplified_expression)
-
-# Extract the terms directly linked to the result
-terms_linked = simplified_expression.free_symbols
-print("Terms directly linked to the result:", terms_linked)
+# Example usage:
+expression_str = "~(A | C & ~A) & (B | ~~C & B)"
+false_terms = find_false_terms(expression_str)
+print("Terms that if false make the expression false:", false_terms)

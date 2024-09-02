@@ -28,7 +28,8 @@ def main(args):
 
 
 
-    # simplified_expr = simplify_logic(expression)
+    # # simplified_expr = simplify_logic(expression)
+
     result = expr_to_list(simplified_expr)
     print(result)
 

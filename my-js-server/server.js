@@ -362,14 +362,7 @@ function formulaToList(formula, reverseReplacements) {
   }
 }
 
-async function check() {
-  resolved[sheetCodeName] = false;
-  let found;
-  
-  data = [-1];
-  var r;
-
-  // initialize data
+function initializeData() {
   for (let i = 1; i < nbLineBef; i++) {
     data.push({attributes: [], conditions: [], ulteriors: [], minPos: 0});
     // check if a non-empty row has no name
@@ -384,11 +377,9 @@ async function check() {
       continue;
     }
   }
-  stop = false;
-  attributes = [];
-  let acc = 0;
-  let accAttr = {};
+}
 
+function getAttributes() {
   // attributes
   for (let j = 0; j < colNumb; j++) {
     let colTitle = values0[sheetCodeName][0][j];
@@ -427,8 +418,21 @@ async function check() {
       }
     }
   }
+}
 
-  // conditions
+function exprToList(expr) {
+  if (expr.constructor.name === "And") {
+      return [-expr.args.length + 1].concat(expr.args.map(arg => exprToList(arg)));
+  } else if (expr.constructor.name === "Or") {
+      return [0].concat(expr.args.map(arg => exprToList(arg)));
+  } else if (expr.constructor.name === "Not") {
+      return [0, 2, exprToList(expr.args[0])];
+  } else {
+      return String(expr);
+  }
+}
+
+async function getConditions() {
   for (let i = 1; i < nbLineBef; i++) {
     let formula = "";
     for (let j = 0; j < colNumb; j++) {
@@ -480,6 +484,8 @@ async function check() {
       return -1;
     }
 
+    let simplifiedList = exprToList(simplified);
+
     
     let stack = [...simplified];
     let output = [];
@@ -494,7 +500,7 @@ async function check() {
         // Process the non-array element (assuming it needs to be stored in the output)
         let aCond = {};
         let groups = reverseReplacements[current];
-        if(groups.after) {
+        if(groups.after !== undefined) {
           aCond.min_d = groups.min_d;
           aCond.max_d = groups.max_d;
           if(aCond.max_d !== undefined) {
@@ -548,10 +554,11 @@ async function check() {
         output.push(current);
       }
     }
+    data[i].conditions = output;
   }
-  data[i].conditions = output;
+}
 
-  // names
+function getNames() {
   for(let i = 1; i < nbLineBef; i++) {
     let valuesI = values[i][nameInd];
     for(let k = 0; k < valuesI.length; k++) {
@@ -595,7 +602,9 @@ async function check() {
       }
     }
   }
+}
 
+function applyCondAttToAllRows() {
   // apply conditions to an attribute to all the rows having the attribute
   for(let i = 1; i < nbLineBef; i++) {
     if(!Number.isInteger(data[i])) {
@@ -617,6 +626,28 @@ async function check() {
       }
     }
   }
+}
+
+async function check() {
+  resolved[sheetCodeName] = false;
+  let found;
+  
+  data = [-1];
+  var r;
+
+  initializeData();
+  stop = false;
+  attributes = [];
+  let acc = 0;
+  let accAttr = {};
+
+  getAttributes();
+
+  await getConditions();
+
+  getNames();
+
+  applyCondAttToAllRows();
 
   // change negative distances to positive distances
   for(let i = 1; i < nbLineBef; i++) {
@@ -2030,57 +2061,100 @@ function extractLinkedTerms(formula) {
 }
 
 const { PythonShell } = require('python-shell');
+
+
+function exprToList(expr) {
+  function parseExpression(expression) {
+      // Remove any spaces from the expression
+      expression = expression.replace(/\s+/g, '');
+
+      // Replace logical operators with symbols that are easier to work with
+      expression = expression.replace(/&&/g, '&').replace(/\|\|/g, '|').replace(/!/g, '~');
+
+      // Function to process the expression recursively
+      function process(expr) {
+          if (expr.startsWith('~')) { // Handle NOT (~) operator
+              return [0, 2, process(expr.substring(1))];
+          } else if (expr.startsWith('(') && expr.endsWith(')')) {
+              expr = expr.substring(1, expr.length - 1);
+          }
+
+          // Find the main operator, respecting parentheses
+          let depth = 0;
+          for (let i = 0; i < expr.length; i++) {
+              if (expr[i] === '(') depth++;
+              if (expr[i] === ')') depth--;
+              if (depth === 0) {
+                  if (expr[i] === '&') { // AND operator
+                      return [-1, process(expr.substring(0, i)), process(expr.substring(i + 1))];
+                  } else if (expr[i] === '|') { // OR operator
+                      return [0, process(expr.substring(0, i)), process(expr.substring(i + 1))];
+                  }
+              }
+          }
+
+          return expr; // Base case: return the literal expression
+      }
+
+      return process(expression);
+  }
+
+  return parseExpression(expr);
+}
+
 const math = require('mathjs');
 
-// Helper functions to evaluate logical expressions
-function and(a, b) {
-  return a && b;
+function evaluateExpression(expressionStr, scope) {
+  // Replace variable names with their corresponding boolean values from the scope
+  Object.keys(scope).forEach(varName => {
+      const value = scope[varName];
+      const regex = new RegExp(`\\b${varName}\\b`, 'g');
+      expressionStr = expressionStr.replace(regex, value);
+  });
+
+  // Replace logical operators with JavaScript equivalents
+  expressionStr = expressionStr
+      .replace(/&&/g, '&&')
+      .replace(/\|\|/g, '||')
+      .replace(/!/g, '!')
+      .replace(/true/g, 'true')
+      .replace(/false/g, 'false');
+
+  // Use Function constructor to evaluate the logical expression
+  return new Function(`return ${expressionStr};`)();
 }
 
-function or(a, b) {
-  return a || b;
+function findFalseTerms(expressionStr) {
+  // Extract variables from the expression (assuming variables are single letters)
+  const variables = expressionStr.match(/[A-Za-z]\b/g);
+  const uniqueVariables = [...new Set(variables)]; // Get unique variables
+
+  let falseTerms = [];
+
+  uniqueVariables.forEach(varName => {
+      // Create a scope where this variable is false
+      let scope = {};
+      scope[varName] = false;
+
+      // Evaluate the expression with the current variable set to false
+      const result = evaluateExpression(expressionStr, scope);
+
+      // If the result is false, add this variable to the falseTerms array
+      if (!result) {
+          falseTerms.push(varName);
+      }
+  });
+
+  return falseTerms;
 }
-
-function not(a) {
-  return !a;
-}
-
-// Define the logical expression
-function expression(word1, word2, word3) {
-  return and(word1, or(and(word1, not(word3)), word2));
-}
-
-// Function to identify terms directly linked to the result
-function getLinkedTerms() {
-  const terms = [];
-
-  const word1 = true;  // placeholder value
-  const word2 = true;  // placeholder value
-  const word3 = false; // placeholder value
-
-  const result = expression(word1, word2, word3);
-
-  if (expression(false, word2, word3) !== result) terms.push('word1');
-  if (expression(word1, false, word3) !== result) terms.push('word2');
-  if (expression(word1, word2, true) !== result) terms.push('word3');
-
-  return terms;
-}
-
-
 
 app.post('/test', async (req, res) => {
-  // Simplifying a logic expression
-  // const expr = 'not(a and b) or (not(b) and not(b))';
-  // let expression = "a && !b || a";
-  
+
   // Example usage:
-  let expression = "!(A | !A) & (B | !!C)";
-  let simplified = simplifyExpression(expression);
-  console.log(simplified);
-  expression = "A & !B | A";
-  simplified = simplifyExpression(expression);
-  console.log(simplified);
+  const expressionStr = "!(A || !A) && (B || !!C && B)";
+  const falseTerms = findFalseTerms(expressionStr);
+  console.log("Terms that if false make the expression false:", falseTerms);
+
 
 
   res.json("result");
