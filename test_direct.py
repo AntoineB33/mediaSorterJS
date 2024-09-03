@@ -20,7 +20,14 @@ def find_false_terms(expression_str):
     
     return false_terms
 
-# Example usage:
-expression_str = "~(A | C & ~A) & (B | ~~C & B)"
-false_terms = find_false_terms(expression_str)
-print("Terms that if false make the expression false:", false_terms)
+
+def main(args):
+    expression = args[0]
+
+    # Output the simplified expression
+    print(json.dumps(find_false_terms))
+
+if __name__ == "__main__":
+    import json
+    import sys
+    main(sys.argv[1:])

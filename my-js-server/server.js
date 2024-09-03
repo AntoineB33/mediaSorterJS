@@ -421,18 +421,70 @@ function getAttributes() {
 }
 
 function exprToList(expr) {
-  if (expr.constructor.name === "And") {
-      return [-expr.args.length + 1].concat(expr.args.map(arg => exprToList(arg)));
-  } else if (expr.constructor.name === "Or") {
-      return [0].concat(expr.args.map(arg => exprToList(arg)));
-  } else if (expr.constructor.name === "Not") {
-      return [0, 2, exprToList(expr.args[0])];
-  } else {
-      return String(expr);
+  // Remove any extra whitespace for easier processing
+  expr = expr.replace(/\s+/g, '');
+
+  // Helper function to check if a character is a letter (a variable in the expression)
+  function isLetter(c) {
+      return c >= 'a' && c <= 'z' || c >= 'A' && c <= 'Z';
   }
+
+  // Recursive function to process the expression
+  function parseExpression(expr) {
+      let stack = [];
+      let i = 0;
+
+      while (i < expr.length) {
+          let char = expr[i];
+
+          if (char === '(') {
+              // Find the matching closing parenthesis
+              let j = i;
+              let parenCount = 0;
+              while (j < expr.length) {
+                  if (expr[j] === '(') parenCount++;
+                  if (expr[j] === ')') parenCount--;
+                  if (parenCount === 0) break;
+                  j++;
+              }
+
+              // Recursively parse the expression within the parentheses
+              stack.push(parseExpression(expr.slice(i + 1, j)));
+              i = j;
+          } else if (isLetter(char)) {
+              // Push the variable as a string
+              stack.push(char);
+          } else if (char === '&') {
+              stack.push(-1); // Represent AND with -1
+          } else if (char === '|') {
+              stack.push(0); // Represent OR with 0
+          } else if (char === '~') {
+              stack.push(2); // Represent NOT with 2
+          }
+
+          i++;
+      }
+
+      // If there's only one item in the stack, return it as the result
+      if (stack.length === 1) {
+          return stack[0];
+      }
+
+      return stack;
+  }
+
+  // Parse the entire expression
+  return parseExpression(expr);
 }
 
 async function getConditions() {
+  let resimplify = [];
+  let reverseReplacements = [];
+  for (let i = 0; i < nbLineBef; i++) {
+    resimplify.push(false);
+    reverseReplacements.push({});
+  }
+
   for (let i = 1; i < nbLineBef; i++) {
     let formula = "";
     for (let j = 0; j < colNumb; j++) {
@@ -456,12 +508,13 @@ async function getConditions() {
     }
 
     let replacedWithWords
-    let reverseReplacements
     try{
-      ({replacedWithWords, reverseReplacements} = replaceWithSameWord(formula));
+      let reverseReplacementsI;
+      ({replacedWithWords, reverseReplacementsI} = replaceWithSameWord(formula));
+      reverseReplacements[i] = reverseReplacementsI;
     } catch(error) {
       inconsist(i, j, error.message, []);
-      return
+      return;
     }
     
     let errorOccurred = false;
@@ -498,17 +551,14 @@ async function getConditions() {
         stack.unshift(...current);
       } else {
         // Process the non-array element (assuming it needs to be stored in the output)
-        let aCond = {};
-        let groups = reverseReplacements[current];
+        let groups = reverseReplacements[i][current];
         if(groups.after !== undefined) {
-          aCond.min_d = groups.min_d;
-          aCond.max_d = groups.max_d;
-          if(aCond.max_d !== undefined) {
-            if(aCond.min_d > aCond.max_d) {
+          if(groups.max_d !== undefined) {
+            if(groups.min_d > groups.max_d) {
               inconsist(i, j, `min_d greater than max_d.`, []);
               return -1;
             }
-            if(aCond.min_d === 0 && aCond.max_d === 0) {
+            if(groups.min_d === 0 && groups.max_d === 0) {
               inconsist(i, j, `min_d and max_d are both 0.`, []);
               return -1;
             }
@@ -551,10 +601,45 @@ async function getConditions() {
             }
           }
         }
-        output.push(current);
+        output.push(groups);
       }
     }
     data[i].conditions = output;
+    
+    
+    errorOccurred = false;
+    let direct_terms = await new Promise((resolve, reject) => {
+      let options = {
+        args: [simplified]  // using Python syntax directly
+      };
+
+      PythonShell.run('test_direct.py', options, function (err, results) {
+        if (err) {
+          errorOccurred = true;
+          reject(err);  // Rejecting the promise on error
+        } else {
+          let parsedResult = JSON.parse(results[0]);
+          resolve(parsedResult);
+        }
+      });
+    });
+    if (errorOccurred) {
+      inconsist_removing_elem(i, j, 0, `incorrect condition.`);
+      return -1;
+    }
+
+    for(let j = 0; j < direct_terms.lenght; j++) {
+      let groups = reverseReplacements[i][direct_terms[j]];
+      if(groups.after !== undefined) {
+        if(groups.max_d < 1) {
+          let word = `word${Object.keys(reverseReplacements[groups.precedent]).length}`;
+          reverseReplacements[groups.precedent][word] = groups;
+          data[groups.precedent].conditions
+        }
+      }
+    }
+
+
   }
 }
 
@@ -1835,7 +1920,7 @@ function findSubformulas(node) {
 function replaceWithSameWord(str) {
   const replacements = {}; // Object to store replacements
   const reverseReplacements = {}; // Object to store reverse mapping
-  let wordCounter = 1; // Counter to generate new words
+  let wordCounter = 0; // Counter to generate new words
 
   const trimmedResult  = str.split(/(\s*&&\s*|\s*\|\|\s*|\s*!\s*|\s*\(\s*|\s*\)\s*)/).filter(Boolean);
   const operators = new Set(["&&", "||", "!", "(", ")"]);
@@ -2151,9 +2236,31 @@ function findFalseTerms(expressionStr) {
 app.post('/test', async (req, res) => {
 
   // Example usage:
-  const expressionStr = "!(A || !A) && (B || !!C && B)";
-  const falseTerms = findFalseTerms(expressionStr);
-  console.log("Terms that if false make the expression false:", falseTerms);
+  const replacedWithWords = "!(A || !A) && (B || !!C && B)";
+    
+  // Prepare the arguments to be passed to the Python script
+  const options = {
+    mode: 'json',
+    pythonOptions: ['-u'], // Unbuffered stdout
+    scriptPath: './', // Directory where the script is located
+  };
+
+  const pyshell = new PythonShell('simplify_expression0.py', options);
+
+  // Send data to the Python script
+  pyshell.send({ replacedWithWords, replacedWithWords });
+
+  // Receive output from the Python script
+  pyshell.on('message', function (message) {
+    // message is a JSON object with the result from the Python script
+    console.log(message);
+  });
+
+  pyshell.end(function (err) {
+    if (err) {
+      res.status(500).send(err.message);
+    }
+  });
 
 
 

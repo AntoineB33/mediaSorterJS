@@ -22,6 +22,8 @@ def main(args):
 
     # Simplify the expression
     simplified_expr = simplify(sympy_expr)
+    
+    # result = expr_to_list(simplified_expr)
 
     # Output the simplified expression
     print(simplified_expr)
@@ -30,8 +32,8 @@ def main(args):
 
     # # simplified_expr = simplify_logic(expression)
 
-    result = expr_to_list(simplified_expr)
-    print(result)
+    # result = expr_to_list(simplified_expr)
+    # print(result)
 
 if __name__ == "__main__":
     import sys
