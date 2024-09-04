@@ -364,7 +364,7 @@ function formulaToList(formula, reverseReplacements) {
 
 function initializeData() {
   for (let i = 1; i < nbLineBef; i++) {
-    data.push({attributes: [], conditions: [], ulteriors: [], minPos: 0});
+    data.push({attributes: [], conditions: [], conditionsStr: "", ulteriors: [], minPos: 0});
     // check if a non-empty row has no name
     if(!values[i][nameInd].length) {
       for (let j = 0; j < values[i].length; j++) {
@@ -478,168 +478,185 @@ function exprToList(expr) {
 }
 
 async function getConditions() {
+  let redo = true;
   let resimplify = [];
   let reverseReplacements = [];
   for (let i = 0; i < nbLineBef; i++) {
-    resimplify.push(false);
+    resimplify.push([""]);
     reverseReplacements.push({});
   }
+  while(redo) {
+    redo = false;
 
-  for (let i = 1; i < nbLineBef; i++) {
-    let formula = "";
-    for (let j = 0; j < colNumb; j++) {
-      if (columnTypes[j] == allColumnTypes.CONDITIONS) {
-        let colPattern = values[0][j];
-        if(colPattern.length) {
-          colPattern = colPattern[0].split("?!");
-        }
-        if (values[i][j].length + (colPattern.length?1:-1) > colPattern.length) {
-          inconsist_removing_elem(i, j, k, `Too much arguments at ${getAddress(i, j)}.`);
-          return -1;
-        }
-        if(values[i][j].length) {
-          let subForumla = values[i][j][0];
-          if(colPattern.length) {
-            subForumla = colPattern[0] + colPattern.slice(1).map((str, index) => values[i][j][index] + str).join('');
+    for (let i = 1; i < nbLineBef; i++) {
+      if(resimplify[i].length === 0) {
+        continue;
+      }
+      let formula = data[i].conditionsStr;
+      if(formula === "") {
+        for (let j = 0; j < colNumb; j++) {
+          if (columnTypes[j] == allColumnTypes.CONDITIONS) {
+            let colPattern = values[0][j];
+            if(colPattern.length) {
+              colPattern = colPattern[0].split("?!");
+            }
+            if (values[i][j].length + (colPattern.length?1:-1) > colPattern.length) {
+              inconsist_removing_elem(i, j, k, `Too much arguments at ${getAddress(i, j)}.`);
+              return -1;
+            }
+            if(values[i][j].length) {
+              let subForumla = values[i][j][0];
+              if(colPattern.length) {
+                subForumla = colPattern[0] + colPattern.slice(1).map((str, index) => values[i][j][index] + str).join('');
+              }
+              formula = formula + "&&" + subForumla;
+            }
           }
-          formula = formula + "&&" + subForumla;
         }
       }
-    }
+      let replacedWithWords
+      try{
+        let reverseReplacementsI;
+        ({replacedWithWords, reverseReplacementsI} = replaceWithSameWord(formula));
+        reverseReplacements[i] = reverseReplacementsI;
+      } catch(error) {
+        inconsist(i, j, error.message, []);
+        return;
+      }
+      if(replacedWithWords === "") {
+        replacedWithWords = "true";
+      }
+      let wordInd = Object.keys(reverseReplacements[i]).length;
+      for (let j = 0; j < resimplify[i].length; j++) {
+        let word = `word${wordInd++}`;
+        replacedWithWords = `(${replacedWithWords}) && ${word}`;
+        reverseReplacements[i][word] = resimplify[i][j];
+      }
+      resimplify[i] = [];
 
-    let replacedWithWords
-    try{
-      let reverseReplacementsI;
-      ({replacedWithWords, reverseReplacementsI} = replaceWithSameWord(formula));
-      reverseReplacements[i] = reverseReplacementsI;
-    } catch(error) {
-      inconsist(i, j, error.message, []);
-      return;
-    }
-    
-    let errorOccurred = false;
-    let simplified = await new Promise((resolve, reject) => {
-      let options = {
-        args: [replacedWithWords]  // using Python syntax directly
-      };
 
-      PythonShell.run('simplify_expression.py', options, function (err, results) {
-        if (err) {
-          errorOccurred = true;
-          reject(err);  // Rejecting the promise on error
-        } else {
-          resolve(results[0]);
-        }
-      });
-    });
-    if (errorOccurred) {
-      inconsist_removing_elem(i, j, 0, `incorrect condition.`);
-      return -1;
-    }
+      let simplified;
+      try {
 
-    let simplifiedList = exprToList(simplified);
+        // Await the result from the Python script
+        simplified = await runPythonScript("simplify_expression", replacedWithWords);
 
-    
-    let stack = [...simplified];
-    let output = [];
-    
-    while (stack.length > 0) {
-      let current = stack.shift();
+        // Send the result back to the client
+        console.log("result");
+      } catch (err) {
+        inconsist_removing_elem(i, j, 0, `incorrect condition : ${err.message}.`);
+        return -1;
+      }
+
       
-      if (Array.isArray(current)) {
-        // Push the current array elements back to the stack, maintaining order
-        stack.unshift(...current);
-      } else {
-        // Process the non-array element (assuming it needs to be stored in the output)
-        let groups = reverseReplacements[i][current];
+      let direct_terms;
+      try {
+
+        // Await the result from the Python script
+        direct_terms = await runPythonScript("test_direct", simplified);
+
+        // Send the result back to the client
+        console.log("result");
+      } catch (err) {
+        inconsist_removing_elem(i, j, 0, `incorrect condition : ${err.message}.`);
+        return -1;
+      }
+      
+      for(let j = 0; j < direct_terms.lenght; j++) {
+        let groups = reverseReplacements[i][direct_terms[j]];
         if(groups.after !== undefined) {
-          if(groups.max_d !== undefined) {
-            if(groups.min_d > groups.max_d) {
-              inconsist(i, j, `min_d greater than max_d.`, []);
-              return -1;
+          if(groups.max_d !== undefined && groups.max_d < 1) {
+            groups.min_d = -groups.max_d;
+            if(groups.min_d === undefined) {
+              groups.max_d = undefined;
+            } else {
+              groups.max_d = -groups.min_d;
             }
-            if(groups.min_d === 0 && groups.max_d === 0) {
-              inconsist(i, j, `min_d and max_d are both 0.`, []);
-              return -1;
-            }
+            simplified = simplified.replace(direct_terms[j], "true");
+            resimplify[groups.precedent].append(groups);
+            redo = true;
           }
-          if(groups.attrib_ref !== undefined) {
-            let refInd_val = checkBrack(i, j, 0, groups.attrib_ref, groups.attrib_ref_col);
+          if(cond.min_d > -1) {
+            data[i].minPos = Math.max(data[i].minPos, cond.min_d);
+          }
+        }
+      }
+      data[i].conditionsStr = simplified;
+
+      let simplifiedList = exprToList(simplified);
+
+      
+      let stack = [...simplified];
+      let output = [];
+      
+      while (stack.length > 0) {
+        let current = stack.shift();
+        
+        if (Array.isArray(current)) {
+          // Push the current array elements back to the stack, maintaining order
+          stack.unshift(...current);
+        } else {
+          // Process the non-array element (assuming it needs to be stored in the output)
+          let groups = reverseReplacements[i][current];
+          if(groups.after !== undefined) {
+            if(groups.max_d !== undefined) {
+              if(groups.min_d > groups.max_d) {
+                inconsist(i, j, `min_d greater than max_d.`, []);
+                return -1;
+              }
+              if(groups.min_d === 0 && groups.max_d === 0) {
+                inconsist(i, j, `min_d and max_d are both 0.`, []);
+                return -1;
+              }
+            }
+            if(groups.attrib_ref !== undefined) {
+              let refInd_val = checkBrack(i, j, 0, groups.attrib_ref, groups.attrib_ref_col);
+              if(refInd_val == -1) {
+                return -1;
+              }
+              if(refInd_val == -2) {
+                inconsist_removing_elem(i, j, k, `attribute "${val}" at ${getAddress(i, j)} not found.`);
+                return -1;
+              }
+              groups.attrib_ref = refInd_val;
+            }
+            let refInd_val = checkBrack(i, j, 0, groups.precedent, groups.precedent_col);
             if(refInd_val == -1) {
               return -1;
             }
-            if(refInd_val == -2) {
-              inconsist_removing_elem(i, j, k, `attribute "${val}" at ${getAddress(i, j)} not found.`);
-              return -1;
-            }
-            groups.attrib_ref = refInd_val;
-          }
-          let refInd_val = checkBrack(i, j, 0, groups.precedent, groups.precedent_col);
-          if(refInd_val == -1) {
-            return -1;
-          }
-          groups.precedent_is_att = refInd_val !== -2;
-          if(groups.precedent_is_att) {
-            groups.precedent = refInd_val;
-          } else {
-            let found = false;
-            for(let m = 1; m < values.length; m++) {
-              for(let f = 0; f < values[m][nameInd].length; f++) {
-                if(values[m][nameInd][f] == groups.precedent) {
-                  groups.precedent = m;
-                  found = true;
+            groups.precedent_is_att = refInd_val !== -2;
+            if(groups.precedent_is_att) {
+              groups.precedent = refInd_val;
+            } else {
+              let found = false;
+              for(let m = 1; m < values.length; m++) {
+                for(let f = 0; f < values[m][nameInd].length; f++) {
+                  if(values[m][nameInd][f] == groups.precedent) {
+                    groups.precedent = m;
+                    found = true;
+                    break;
+                  }
+                }
+                if(found) {
                   break;
                 }
               }
-              if(found) {
-                break;
+              if(!found) {
+                inconsist_removing_elem(i, j, 0, `precedent "${groups.precedent}" at ${getAddress(i, j)} not found.`);
+                return -1;
               }
             }
-            if(!found) {
-              inconsist_removing_elem(i, j, 0, `precedent "${groups.precedent}" at ${getAddress(i, j)} not found.`);
-              return -1;
-            }
           }
-        }
-        output.push(groups);
-      }
-    }
-    data[i].conditions = output;
-    
-    
-    errorOccurred = false;
-    let direct_terms = await new Promise((resolve, reject) => {
-      let options = {
-        args: [simplified]  // using Python syntax directly
-      };
-
-      PythonShell.run('test_direct.py', options, function (err, results) {
-        if (err) {
-          errorOccurred = true;
-          reject(err);  // Rejecting the promise on error
-        } else {
-          let parsedResult = JSON.parse(results[0]);
-          resolve(parsedResult);
-        }
-      });
-    });
-    if (errorOccurred) {
-      inconsist_removing_elem(i, j, 0, `incorrect condition.`);
-      return -1;
-    }
-
-    for(let j = 0; j < direct_terms.lenght; j++) {
-      let groups = reverseReplacements[i][direct_terms[j]];
-      if(groups.after !== undefined) {
-        if(groups.max_d < 1) {
-          let word = `word${Object.keys(reverseReplacements[groups.precedent]).length}`;
-          reverseReplacements[groups.precedent][word] = groups;
-          data[groups.precedent].conditions
+          output.push(groups);
         }
       }
+      data[i].conditions = output;
+      
+      
+
+
+
     }
-
-
   }
 }
 
@@ -2233,36 +2250,52 @@ function findFalseTerms(expressionStr) {
   return falseTerms;
 }
 
+
+// Function to call Python script and return a promise
+function runPythonScript(pythonFile, arg1) {
+  return new Promise((resolve, reject) => {
+    const options = {
+      mode: 'json',
+      pythonOptions: ['-u'], // Unbuffered stdout
+      scriptPath: './', // Directory where the script is located
+    };
+
+    const pyshell = new PythonShell(pythonFile + ".py", options);
+
+    // Send data to the Python script
+    pyshell.send({ arg1 });
+
+    // Receive output from the Python script
+    pyshell.on('message', (message) => {
+      resolve(message); // Resolve the promise with the message (result) from Python
+    });
+
+    pyshell.end((err) => {
+      if (err) reject(err); // Reject the promise if there's an error
+    });
+  });
+}
+
 app.post('/test', async (req, res) => {
 
   // Example usage:
-  const replacedWithWords = "!(A || !A) && (B || !!C && B)";
-    
-  // Prepare the arguments to be passed to the Python script
-  const options = {
-    mode: 'json',
-    pythonOptions: ['-u'], // Unbuffered stdout
-    scriptPath: './', // Directory where the script is located
-  };
+  const arg1 = "B | ~C & ~B";
+  const arg2 = "!(A || !A) && (B || !!C && B)";
 
-  const pyshell = new PythonShell('simplify_expression0.py', options);
+  
+  try {
 
-  // Send data to the Python script
-  pyshell.send({ replacedWithWords, replacedWithWords });
+    // Await the result from the Python script
+    const result = await runPythonScript("simplify_expression", arg1);
 
-  // Receive output from the Python script
-  pyshell.on('message', function (message) {
-    // message is a JSON object with the result from the Python script
-    console.log(message);
-  });
-
-  pyshell.end(function (err) {
-    if (err) {
-      res.status(500).send(err.message);
-    }
-  });
+    // Send the result back to the client
+    console.log("result");
+    res.json(result);
+  } catch (err) {
+    res.status(500).send(err.message);
+  }
+  console.log("message");
 
 
 
-  res.json("result");
 });

@@ -1,4 +1,6 @@
 from sympy import symbols, simplify_logic, And, Or, Not, sympify, simplify
+import sys
+import json
 
 def expr_to_list(expr):
     """
@@ -13,12 +15,12 @@ def expr_to_list(expr):
     else:
         return str(expr)
 
-def main(args):
-    expression = args[0]
+def main(expression):
     expression = expression.replace("&&", "&").replace("||", "|").replace("!", "~")
 
     # Convert the string into a SymPy expression
     sympy_expr = sympify(expression)
+    # sympy_expr = sympify("B | ~C & ~B")
 
     # Simplify the expression
     simplified_expr = simplify(sympy_expr)
@@ -26,7 +28,7 @@ def main(args):
     # result = expr_to_list(simplified_expr)
 
     # Output the simplified expression
-    print(simplified_expr)
+    return str(simplified_expr)
 
 
 
@@ -36,5 +38,15 @@ def main(args):
     # print(result)
 
 if __name__ == "__main__":
-    import sys
-    main(sys.argv[1:])
+    # import sys
+    # main(sys.argv[1:])
+
+
+    # Assume arguments are passed as JSON via stdin
+    input_json = sys.stdin.read()
+    args = json.loads(input_json)
+    
+    result = main(args['arg1'])
+    
+    # Output result as JSON
+    print(json.dumps({"result": result}))

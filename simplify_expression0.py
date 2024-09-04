@@ -2,8 +2,10 @@
 
 import sys
 import json
+import time
 
 def my_python_function(arg1, arg2):
+    time.sleep(1)
     return f"Received: {arg1} and {arg2}"
 
 if __name__ == "__main__":
