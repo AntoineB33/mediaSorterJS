@@ -40,6 +40,7 @@ var oldVersionsMaxNb = 20;
 var columnTypes;
 var child;
 var data;
+var allMediaRows;
 var attrOfAttr;
 var headerNames;
 var nameSt = "names";
@@ -365,7 +366,7 @@ function formulaToList(formula, reverseReplacements) {
 
 function initializeData() {
   for (let i = 1; i < nbLineBef; i++) {
-    data.push({attributes: new Set(), conditions: [], reverseReplacements: [], newWords: [], posteriors: [], ulteriors: 0, minPos: 0});
+    data.push({attributes: new Set(), conditions: [], reverseReplacements: [], newWords: [], posteriors: [], ulteriors: 0, minDist: 0});
     // check if a non-empty row has no name
     if(!values[i][nameInd].length) {
       for (let j = 0; j < values[i].length; j++) {
@@ -422,6 +423,7 @@ function getAttributes() {
 }
 
 function getNames() {
+  allMediaRows = [];
   for(let i = 1; i < nbLineBef; i++) {
     let valuesI = values[i][nameInd];
     for(let k = 0; k < valuesI.length; k++) {
@@ -448,14 +450,19 @@ function getNames() {
         }
       } else {
         attrOfAttr[refInd_val] = data[i].attributes;
+        if(data[i].isAtt !== undefined && data[i].isAtt !== refInd_val) {
+          inconsist_removing_elem(i, nameInd, k, `attribute "${val}" at ${getAddress(i, nameInd)} is already linked to another name.`);
+          return -1;
+        }
         data[i].isAtt = refInd_val;
       }
     }
-  }
-  for(let i = 1; i < nbLineBef; i++) {
-    if(data[i].isAtt !== undefined) {
-      continue;
+    if(data[i].isAtt === undefined) {
+      allMediaRows.push(i);
     }
+  }
+  for (let i0 = 1; i0 < allMediaRows.length; i0++) {
+    let i = allMediaRows[i0];
     let visited = new Set();
     for(let j of data[i].attributes) {
       const queue = [j]; // Initialize the queue with the start index
@@ -562,10 +569,9 @@ function addFormula(i, formula) {
 }
 
 async function getConditions() {
-  for (let i = 1; i < nbLineBef; i++) {
-    if(data[i].isAtt !== undefined) {
-      continue;
-    }
+  let optConds = false;
+  for (let i0 = 1; i0 < allMediaRows.length; i0++) {
+    let i = allMediaRows[i0];
     let formula = [];
     addFormula(i, formula);
     for (let a of data[i].attributes) {
@@ -594,6 +600,12 @@ async function getConditions() {
     } catch (err) {
       inconsist_removing_elem(i, j, 0, `incorrect condition : ${err.message}.`);
       return -1;
+    }
+    if(!optConds) {
+      const maxWord = direct_terms.reduce((max, item) => (item.value > max ? item.value : max), -Infinity);
+      if(direct_terms.length <= maxWord) {
+        optConds = true;
+      }
     }
     
 
@@ -681,65 +693,64 @@ async function getConditions() {
           data[i].posteriors.append([groups.precedent, groups.min_d, groups.max_d]);
           data[groups.precedent].ulteriors++;
         }
+      } else if(groups.position !== undefined) {
+        if(data[i].position !== undefined && data[i].position !== groups.position) {
+          inconsist(i, j, `position "${groups.position}" at ${getAddress(i, j)} is not unique.`, []);
+          return -1;
+        }
+        data[i].position = groups.position;
       }
     }
     data[i].reverseReplacements = reverseReplacements;
     data[i].replacedWithWords = replacedWithWords;
   }
 
-  for (let i = 1; i < nbLineBef; i++) {
-    if(data[i].ulteriors !== 0) {
+  // check for cycles or exceed of list length
+  let visited = new Set();  // Track visited elements
+  let stack = [];  // Explicit stack for DFS
+  for (let i0 = 1; i0 < allMediaRows.length; i0++) {
+    let i = allMediaRows[i0];
+    if(data[i].ulteriors !== 0 || visited.has(i)) {
       continue;
     }
-    
 
+    // Use a stack to track the current DFS path
+    let currentStack = [];
+    let currentVisited = new Set();
+    let lastPos = [allMediaRows.length];
 
-    
-    const inDegree = Array(nbLineBef).fill(0);
-    const maxDistance = Array(nbLineBef).fill(0);
+    stack.push(i);
 
-    // Create adjacency list and in-degree list
-    const adjList = Array.from({ length: nbLineBef }, () => []);
+    while (stack.length > 0) {
+      let node = stack.pop();
 
-    // Build graph and calculate in-degree for each node
-    for (let i = 0; i < nbLineBef; i++) {
-        for (const [neighbor, distance] of graph[i]) {
-            adjList[i].push([neighbor, distance]);
-            inDegree[neighbor]++;
-        }
-    }
+      if (currentVisited.has(node)) {
+        // Cycle detected
+        let cycle = [...currentStack.slice(currentStack.indexOf(node)), node];
+        inconsist(cycle[0], 0, `Cycle detected: ${cycle.map(index => `${values[index][nameInd][0]} (${index})`).join(" -> ")}.`, []);
+        return -1;
+      }
 
-    // Queue to store nodes with in-degree of 0 (nodes with no dependencies)
-    const queue = [];
+      currentVisited.add(node);  // Mark current node as visited in the current path
+      if(data[node].position !== undefined) {
+        lastPos.push(data[node].position);
+      } else {
+        let min_d = 1;
+        if()
+        lastPos.push(lastPos[lastPos.length - 1] - min_d);
+      }
+      visited.add(node);  // Add to the global visited set
 
-    // Initialize the queue with nodes that have no incoming edges
-    for (let i = 0; i < nbLineBef; i++) {
-        if (inDegree[i] === 0) {
-            queue.push(i);
-        }
-    }
-
-    // Process nodes in topological order
-    while (queue.length > 0) {
-        const node = queue.shift();
-
-        // Update the maxDistance for each neighbor
-        for (const [neighbor, distance] of adjList[node]) {
-            maxDistance[neighbor] = Math.max(maxDistance[neighbor], maxDistance[node] + distance);
-
-            // Decrease in-degree and if it becomes zero, add it to the queue
-            inDegree[neighbor]--;
-            if (inDegree[neighbor] === 0) {
-                queue.push(neighbor);
-            }
-        }
+      let nextNode = elements[node];
+      if (nextNode && !visited.has(nextNode)) {
+        stack.push(nextNode);
+      }
     }
   }
 
-  for (let i = 1; i < nbLineBef; i++) {
-    if(data[i].isAtt !== undefined) {
-      continue;
-    }
+  // simplify the formulas
+  for (let i0 = 1; i0 < allMediaRows.length; i0++) {
+    let i = allMediaRows[i0];
     let reverseReplacements = data[i].replacedWithWords;
     let simplified;
     try {
@@ -822,28 +833,6 @@ async function check() {
 
 
   applyCondAttToAllRows();
-
-  // change negative distances to positive distances
-  for(let i = 1; i < nbLineBef; i++) {
-    if(!Number.isInteger(data[i])) {
-      for(let j = 0; j < data[i].conditions.length; j++) {
-        let cond = data[i].conditions[j];
-        if(cond.max_d !== undefined && cond.max_d < 1) {
-          cond.min_d = -cond.max_d;
-          if(cond.min_d === undefined) {
-            cond.max_d = undefined;
-          } else {
-            cond.max_d = -cond.min_d;
-          }
-          data[cond.precedent].conditions.push(cond);
-          data[i].conditions.splice(j, 1);
-        }
-        if(cond.min_d > -1) {
-          data[i].minPos = Math.max(data[i].minPos, cond.min_d);
-        }
-      }
-    }
-  }
 
   // check if there is a cycle
   let cycle = findCycle(data.map(row => {conditions: row.conditions.filter(condition => condition.min_d !== undefined && condition.min_d > -1)}));
