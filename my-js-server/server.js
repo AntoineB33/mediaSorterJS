@@ -40,6 +40,7 @@ var oldVersionsMaxNb = 20;
 var columnTypes;
 var child;
 var data;
+var attrOfAttr;
 var headerNames;
 var nameSt = "names";
 var nameInd;
@@ -364,7 +365,7 @@ function formulaToList(formula, reverseReplacements) {
 
 function initializeData() {
   for (let i = 1; i < nbLineBef; i++) {
-    data.push({attributes: [], conditions: [], conditionsStr: "", ulteriors: [], minPos: 0});
+    data.push({attributes: new Set(), conditions: [], reverseReplacements: [], newWords: [], posteriors: [], ulteriors: 0, minPos: 0});
     // check if a non-empty row has no name
     if(!values[i][nameInd].length) {
       for (let j = 0; j < values[i].length; j++) {
@@ -408,15 +409,76 @@ function getAttributes() {
           }
           if(attInd == attNames[j].length) {
             attNames[j].push(val);
+            attrOfAttr.push(new Set());
             attributes.push([]);
             attInd += accAttr[j];
             acc+=1;
           }
-          data[i].attributes.push(attInd);
-          attributes[attInd].append(i);
+          data[i].attributes.add(attInd);
         }
       }
     }
+  }
+}
+
+function getNames() {
+  for(let i = 1; i < nbLineBef; i++) {
+    let valuesI = values[i][nameInd];
+    for(let k = 0; k < valuesI.length; k++) {
+      let val = valuesI[k];
+      const regexName = /(?<val>[^\[\]]+)(?:\s*\[\s*\"(?<columnTitle>[^\[\]]+)\s*\])?/g;
+      let match = regexName.exec(val);
+      let refInd_val;
+      if(match !== null) {
+        refInd_val = checkBrack(i, nameInd, k, match.groups.val, match.groups.columnTitle);
+        if(refInd_val == -1) {
+          return -1;
+        }
+        valuesI[k] = '"' + val + '"' + (match.groups.columnTitle===undefined?"":'["' + match.groups.columnTitle + '"]');
+      }
+      if(match === null || refInd_val === -2) {
+        // check if the name is already used
+        for (let r = 1; r <= i; r++) {
+          for (let f = 0; f < values[r][nameInd].length; f++) {
+            if ((r < i || f < k) && valuesI[k]==values[r][nameInd][k]) {
+              inconsist_replacing_elem(i, nameInd, k, findNewName(valuesI[k]), `name "${valuesI[k]}" at ${getAddress(i, nameInd)} already at ${getAddress(r, nameInd)}`);
+              return -1;
+            }
+          }
+        }
+      } else {
+        attrOfAttr[refInd_val] = data[i].attributes;
+        data[i].isAtt = refInd_val;
+      }
+    }
+  }
+  for(let i = 1; i < nbLineBef; i++) {
+    if(data[i].isAtt !== undefined) {
+      continue;
+    }
+    let visited = new Set();
+    for(let j of data[i].attributes) {
+      const queue = [j]; // Initialize the queue with the start index
+      
+      // While the queue is not empty
+      while (queue.length > 0) {
+        const currentIndex = queue.shift();  // Get the next set index to explore
+        
+        // If we haven't visited this set yet
+        if (!visited.has(currentIndex)) {
+          // Mark this set as visited
+          visited.add(currentIndex);
+          
+          // Add all the sets that this set points to into the queue
+          for (let pointedIndex of attrOfAttr[currentIndex]) {
+            if (!visited.has(pointedIndex)) {
+              queue.push(pointedIndex);
+            }
+          }
+        }
+      }
+    }
+    data[i].attributes = visited;
   }
 }
 
@@ -477,233 +539,242 @@ function exprToList(expr) {
   return parseExpression(expr);
 }
 
-async function getConditions() {
-  let redo = true;
-  let resimplify = [];
-  let reverseReplacements = [];
-  for (let i = 0; i < nbLineBef; i++) {
-    resimplify.push([""]);
-    reverseReplacements.push({});
-  }
-  while(redo) {
-    redo = false;
-
-    for (let i = 1; i < nbLineBef; i++) {
-      if(resimplify[i].length === 0) {
-        continue;
+function addFormula(i, formula) {
+  for (let j = 0; j < colNumb; j++) {
+    if (columnTypes[j] == allColumnTypes.CONDITIONS) {
+      let colPattern = values[0][j];
+      if(colPattern.length) {
+        colPattern = colPattern[0].split("?!");
       }
-      let formula = data[i].conditionsStr;
-      if(formula === "") {
-        for (let j = 0; j < colNumb; j++) {
-          if (columnTypes[j] == allColumnTypes.CONDITIONS) {
-            let colPattern = values[0][j];
-            if(colPattern.length) {
-              colPattern = colPattern[0].split("?!");
-            }
-            if (values[i][j].length + (colPattern.length?1:-1) > colPattern.length) {
-              inconsist_removing_elem(i, j, k, `Too much arguments at ${getAddress(i, j)}.`);
-              return -1;
-            }
-            if(values[i][j].length) {
-              let subForumla = values[i][j][0];
-              if(colPattern.length) {
-                subForumla = colPattern[0] + colPattern.slice(1).map((str, index) => values[i][j][index] + str).join('');
-              }
-              formula = formula + "&&" + subForumla;
-            }
-          }
-        }
-      }
-      let replacedWithWords
-      try{
-        let reverseReplacementsI;
-        ({replacedWithWords, reverseReplacementsI} = replaceWithSameWord(formula));
-        reverseReplacements[i] = reverseReplacementsI;
-      } catch(error) {
-        inconsist(i, j, error.message, []);
-        return;
-      }
-      if(replacedWithWords === "") {
-        replacedWithWords = "true";
-      }
-      let wordInd = Object.keys(reverseReplacements[i]).length;
-      for (let j = 0; j < resimplify[i].length; j++) {
-        let word = `word${wordInd++}`;
-        replacedWithWords = `(${replacedWithWords}) && ${word}`;
-        reverseReplacements[i][word] = resimplify[i][j];
-      }
-      resimplify[i] = [];
-
-
-      let simplified;
-      try {
-
-        // Await the result from the Python script
-        simplified = await runPythonScript("simplify_expression", replacedWithWords);
-
-        // Send the result back to the client
-        console.log("result");
-      } catch (err) {
-        inconsist_removing_elem(i, j, 0, `incorrect condition : ${err.message}.`);
+      if (values[i][j].length + (colPattern.length?1:-1) > colPattern.length) {
+        inconsist_removing_elem(i, j, k, `Too much arguments at ${getAddress(i, j)}.`);
         return -1;
       }
-
-      
-      let direct_terms;
-      try {
-
-        // Await the result from the Python script
-        direct_terms = await runPythonScript("test_direct", simplified);
-
-        // Send the result back to the client
-        console.log("result");
-      } catch (err) {
-        inconsist_removing_elem(i, j, 0, `incorrect condition : ${err.message}.`);
-        return -1;
-      }
-      
-      for(let j = 0; j < direct_terms.lenght; j++) {
-        let groups = reverseReplacements[i][direct_terms[j]];
-        if(groups.after !== undefined) {
-          if(groups.max_d !== undefined && groups.max_d < 1) {
-            groups.min_d = -groups.max_d;
-            if(groups.min_d === undefined) {
-              groups.max_d = undefined;
-            } else {
-              groups.max_d = -groups.min_d;
-            }
-            simplified = simplified.replace(direct_terms[j], "true");
-            resimplify[groups.precedent].append(groups);
-            redo = true;
-          }
-          if(cond.min_d > -1) {
-            data[i].minPos = Math.max(data[i].minPos, cond.min_d);
-          }
+      if(values[i][j].length) {
+        let subForumla = values[i][j][0];
+        if(colPattern.length) {
+          subForumla = colPattern[0] + colPattern.slice(1).map((str, index) => values[i][j][index] + str).join('');
         }
+        formula.push(subForumla);
       }
-      data[i].conditionsStr = simplified;
-
-      let simplifiedList = exprToList(simplified);
-
-      
-      let stack = [...simplified];
-      let output = [];
-      
-      while (stack.length > 0) {
-        let current = stack.shift();
-        
-        if (Array.isArray(current)) {
-          // Push the current array elements back to the stack, maintaining order
-          stack.unshift(...current);
-        } else {
-          // Process the non-array element (assuming it needs to be stored in the output)
-          let groups = reverseReplacements[i][current];
-          if(groups.after !== undefined) {
-            if(groups.max_d !== undefined) {
-              if(groups.min_d > groups.max_d) {
-                inconsist(i, j, `min_d greater than max_d.`, []);
-                return -1;
-              }
-              if(groups.min_d === 0 && groups.max_d === 0) {
-                inconsist(i, j, `min_d and max_d are both 0.`, []);
-                return -1;
-              }
-            }
-            if(groups.attrib_ref !== undefined) {
-              let refInd_val = checkBrack(i, j, 0, groups.attrib_ref, groups.attrib_ref_col);
-              if(refInd_val == -1) {
-                return -1;
-              }
-              if(refInd_val == -2) {
-                inconsist_removing_elem(i, j, k, `attribute "${val}" at ${getAddress(i, j)} not found.`);
-                return -1;
-              }
-              groups.attrib_ref = refInd_val;
-            }
-            let refInd_val = checkBrack(i, j, 0, groups.precedent, groups.precedent_col);
-            if(refInd_val == -1) {
-              return -1;
-            }
-            groups.precedent_is_att = refInd_val !== -2;
-            if(groups.precedent_is_att) {
-              groups.precedent = refInd_val;
-            } else {
-              let found = false;
-              for(let m = 1; m < values.length; m++) {
-                for(let f = 0; f < values[m][nameInd].length; f++) {
-                  if(values[m][nameInd][f] == groups.precedent) {
-                    groups.precedent = m;
-                    found = true;
-                    break;
-                  }
-                }
-                if(found) {
-                  break;
-                }
-              }
-              if(!found) {
-                inconsist_removing_elem(i, j, 0, `precedent "${groups.precedent}" at ${getAddress(i, j)} not found.`);
-                return -1;
-              }
-            }
-          }
-          output.push(groups);
-        }
-      }
-      data[i].conditions = output;
-      
-      
-
-
-
     }
   }
 }
 
-function getNames() {
-  for(let i = 1; i < nbLineBef; i++) {
-    let valuesI = values[i][nameInd];
-    for(let k = 0; k < valuesI.length; k++) {
-      let val = valuesI[k];
-      const regexName = /(?<val>[^\[\]]+)(?:\s*\[\s*\"(?<columnTitle>[^\[\]]+)\s*\])?/g;
-      let match = regexName.exec(val);
-      let refInd_val;
-      if(match !== null) {
-        refInd_val = checkBrack(i, nameInd, k, match.groups.val, match.groups.columnTitle);
-        if(refInd_val == -1) {
-          return -1;
-        }
-        valuesI[k] = '"' + val + '"' + (match.groups.columnTitle===undefined?"":'["' + match.groups.columnTitle + '"]');
-      }
-      if(match === null || refInd_val === -2) {
-        // check if the name is already used
-        for (let r = 1; r <= i; r++) {
-          for (let f = 0; f < values[r][nameInd].length; f++) {
-            if ((r < i || f < k) && valuesI[k]==values[r][nameInd][k]) {
-              inconsist_replacing_elem(i, nameInd, k, findNewName(valuesI[k]), `name "${valuesI[k]}" at ${getAddress(i, nameInd)} already at ${getAddress(r, nameInd)}`);
+async function getConditions() {
+  for (let i = 1; i < nbLineBef; i++) {
+    if(data[i].isAtt !== undefined) {
+      continue;
+    }
+    let formula = [];
+    addFormula(i, formula);
+    for (let a of data[i].attributes) {
+      addFormula(a, formula);
+    }
+    formula = formula.join(" && ");
+    let replacedWithWords;
+    let reverseReplacements;
+    try{
+      let reverseReplacementsI;
+      ({replacedWithWords, reverseReplacementsI} = replaceWithSameWord(formula));
+      reverseReplacements = reverseReplacementsI;
+    } catch(error) {
+      inconsist(i, j, error.message, []);
+      return;
+    }
+    
+    let direct_terms;
+    try {
+
+      // Await the result from the Python script
+      direct_terms = JSON.parse(await runPythonScript("test_direct", replacedWithWords));
+
+      // Send the result back to the client
+      console.log("result");
+    } catch (err) {
+      inconsist_removing_elem(i, j, 0, `incorrect condition : ${err.message}.`);
+      return -1;
+    }
+    
+
+
+    let formulaList = exprToList(replacedWithWords);
+    let stack = [...formulaList];
+    let output = [];
+    
+    while (stack.length > 0) {
+      let current = stack.shift();
+      
+      if (Array.isArray(current)) {
+        // Push the current array elements back to the stack, maintaining order
+        stack.unshift(...current);
+      } else {
+        // Process the non-array element (assuming it needs to be stored in the output)
+        let groups = reverseReplacements[current];
+        if(groups.after !== undefined) {
+          if(groups.max_d !== undefined) {
+            if(groups.min_d > groups.max_d) {
+              inconsist(i, j, `min_d greater than max_d.`, []);
+              return -1;
+            }
+            if(groups.min_d === 0 && groups.max_d === 0) {
+              inconsist(i, j, `min_d and max_d are both 0.`, []);
+              return -1;
+            }
+          }
+          if(groups.attrib_ref !== undefined) {
+            let refInd_val = checkBrack(i, j, 0, groups.attrib_ref, groups.attrib_ref_col);
+            if(refInd_val == -1) {
+              return -1;
+            }
+            if(refInd_val == -2) {
+              inconsist_removing_elem(i, j, k, `attribute "${val}" at ${getAddress(i, j)} not found.`);
+              return -1;
+            }
+            groups.attrib_ref = refInd_val;
+          }
+          let refInd_val = checkBrack(i, j, 0, groups.precedent, groups.precedent_col);
+          if(refInd_val == -1) {
+            return -1;
+          }
+          groups.precedent_is_att = refInd_val !== -2;
+          if(groups.precedent_is_att) {
+            groups.precedent = refInd_val;
+          } else {
+            let found = false;
+            for(let m = 1; m < values.length; m++) {
+              for(let f = 0; f < values[m][nameInd].length; f++) {
+                if(values[m][nameInd][f] == groups.precedent) {
+                  groups.precedent = m;
+                  found = true;
+                  break;
+                }
+              }
+              if(found) {
+                break;
+              }
+            }
+            if(!found) {
+              inconsist_removing_elem(i, j, 0, `precedent "${groups.precedent}" at ${getAddress(i, j)} not found.`);
               return -1;
             }
           }
         }
-      } else {
-        if(data[i].attributes.length) {
-          inconsist_removing_elem(i, f, 0, `there is an attribute at "${getAddress(i, f)}" although the row references an attribute`);
-          return -1;
-        }
-        for(let r = 1; r < values.length; r++) {
-          if(!Number.isInteger(data[r])) {
-            for(let f = 0; f < data[r].attributes.length; f++) {
-              if(data[r].attributes[f] == refInd_val) {
-                data[r].attributes.concat(data[i].attributes);
-                data[r].conditions.concat(data[i].conditions);
-              }
-            }
-          }
-        }
-        data[i] = refInd_val;
+        output.push(groups);
       }
     }
+    
+    for(let j = 0; j < direct_terms.lenght; j++) {
+      let groups = reverseReplacements[direct_terms[j]];
+      if(groups.after !== undefined) {
+        if(groups.max_d !== undefined && groups.max_d < 1) {
+          groups.min_d = -groups.max_d;
+          if(groups.min_d === undefined) {
+            groups.max_d = undefined;
+          } else {
+            groups.max_d = -groups.min_d;
+          }
+          replacedWithWords = replacedWithWords.replace(direct_terms[j], "true ");
+          data[groups.precedent].posteriors.append([i, groups.min_d, groups.max_d]);
+          data[i].ulteriors++;
+        } else if(groups.min_d !== undefined && groups.min_d > -1) {
+          data[i].posteriors.append([groups.precedent, groups.min_d, groups.max_d]);
+          data[groups.precedent].ulteriors++;
+        }
+      }
+    }
+    data[i].reverseReplacements = reverseReplacements;
+    data[i].replacedWithWords = replacedWithWords;
   }
+
+  for (let i = 1; i < nbLineBef; i++) {
+    if(data[i].ulteriors !== 0) {
+      continue;
+    }
+    
+
+
+    
+    const inDegree = Array(nbLineBef).fill(0);
+    const maxDistance = Array(nbLineBef).fill(0);
+
+    // Create adjacency list and in-degree list
+    const adjList = Array.from({ length: nbLineBef }, () => []);
+
+    // Build graph and calculate in-degree for each node
+    for (let i = 0; i < nbLineBef; i++) {
+        for (const [neighbor, distance] of graph[i]) {
+            adjList[i].push([neighbor, distance]);
+            inDegree[neighbor]++;
+        }
+    }
+
+    // Queue to store nodes with in-degree of 0 (nodes with no dependencies)
+    const queue = [];
+
+    // Initialize the queue with nodes that have no incoming edges
+    for (let i = 0; i < nbLineBef; i++) {
+        if (inDegree[i] === 0) {
+            queue.push(i);
+        }
+    }
+
+    // Process nodes in topological order
+    while (queue.length > 0) {
+        const node = queue.shift();
+
+        // Update the maxDistance for each neighbor
+        for (const [neighbor, distance] of adjList[node]) {
+            maxDistance[neighbor] = Math.max(maxDistance[neighbor], maxDistance[node] + distance);
+
+            // Decrease in-degree and if it becomes zero, add it to the queue
+            inDegree[neighbor]--;
+            if (inDegree[neighbor] === 0) {
+                queue.push(neighbor);
+            }
+        }
+    }
+  }
+
+  for (let i = 1; i < nbLineBef; i++) {
+    if(data[i].isAtt !== undefined) {
+      continue;
+    }
+    let reverseReplacements = data[i].replacedWithWords;
+    let simplified;
+    try {
+
+      // Await the result from the Python script
+      simplified = JSON.parse(await runPythonScript("simplify_expression", reverseReplacements));
+
+      // Send the result back to the client
+      console.log("result");
+    } catch (err) {
+      inconsist_removing_elem(i, j, 0, `incorrect condition : ${err.message}.`);
+      return -1;
+    }
+    let formulaList = exprToList(simplified);
+    let stack = [...formulaList];
+    let output = [];
+    
+    while (stack.length > 0) {
+      let current = stack.shift();
+      
+      if (Array.isArray(current)) {
+        // Push the current array elements back to the stack, maintaining order
+        stack.unshift(...current);
+      } else {
+        // Process the non-array element (assuming it needs to be stored in the output)
+        let groups = reverseReplacements[current];
+        output.push(groups);
+      }
+    }
+    data[i].conditions = output;
+  }
+}
+
+function getSimplifiedCond() {
+
 }
 
 function applyCondAttToAllRows() {
@@ -715,7 +786,7 @@ function applyCondAttToAllRows() {
         let att = -1;
         if(cond.precedent_is_att) {
           att = cond.precedent;
-        } else if(Number.isInteger(data[cond])) { 
+        } else if(Number.isInteger(data[cond])) {
           att = data[cond];
         }
         if(att !== -1) {
@@ -745,9 +816,10 @@ async function check() {
 
   getAttributes();
 
+  getNames();
+
   await getConditions();
 
-  getNames();
 
   applyCondAttToAllRows();
 
@@ -1949,12 +2021,12 @@ function replaceWithSameWord(str) {
     if (!operators.has(item)) {
       const match = str.match(regex);
       if(!match) {
-        throw new Error("incorrect condition.");
+        return Error("incorrect condition.");
       }
       const groups = match.groups; // The last element in args array is the groups object
 
       if (!replacements[match[0]]) {
-        const newWord = `word${wordCounter++}`;
+        const newWord = `word${wordCounter++} `;
         replacements[match[0]] = newWord;
 
         // Store the reverse mapping along with the capturing groups

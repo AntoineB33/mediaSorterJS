@@ -22,10 +22,9 @@ def find_false_terms(expression_str):
 
 
 def main(args):
-    expression = args[0]
 
     # Output the simplified expression
-    print(json.dumps(find_false_terms))
+    print(json.dumps(find_false_terms(args[0])))
 
 if __name__ == "__main__":
     import json
