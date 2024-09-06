@@ -722,29 +722,35 @@ async function getConditions() {
     stack.push(i);
 
     while (stack.length > 0) {
-      let node = stack.pop();
+      let currentNode = stack.pop();
 
-      if (currentVisited.has(node)) {
+      if (currentVisited.has(currentNode)) {
         // Cycle detected
-        let cycle = [...currentStack.slice(currentStack.indexOf(node)), node];
+        let cycle = [...currentStack.slice(currentStack.indexOf(currentNode)), currentNode];
         inconsist(cycle[0], 0, `Cycle detected: ${cycle.map(index => `${values[index][nameInd][0]} (${index})`).join(" -> ")}.`, []);
         return -1;
       }
 
-      currentVisited.add(node);  // Mark current node as visited in the current path
-      if(data[node].position !== undefined) {
-        lastPos.push(data[node].position);
+      currentVisited.add(currentNode);  // Mark current node as visited in the current path
+      if(data[currentNode].position !== undefined) {
+        lastPos.push(data[currentNode].position);
       } else {
         let min_d = 1;
-        if()
+        // if(data[currentNode].position !== undefined) {
+        //   if()
+        // }
         lastPos.push(lastPos[lastPos.length - 1] - min_d);
       }
-      visited.add(node);  // Add to the global visited set
+      visited.add(currentNode);  // Add to the global visited set
 
-      let nextNode = elements[node];
-      if (nextNode && !visited.has(nextNode)) {
-        stack.push(nextNode);
+      for(let neighbor of data[currentNode].posteriors) {
+        if (!visited.has(neighbor)) {
+          stack.push(neighbor);
+        }
       }
+
+      // Remove currentNode from currentVisited after DFS on its neighbors
+      currentVisited.delete(currentNode);
     }
   }
 
@@ -2337,26 +2343,119 @@ function runPythonScript(pythonFile, arg1) {
   });
 }
 
-app.post('/test', async (req, res) => {
 
-  // Example usage:
-  const arg1 = "B | ~C & ~B";
-  const arg2 = "!(A || !A) && (B || !!C && B)";
+function checkCycleAndExceeds(graph, threshold) {
+  // graph is an adjacency list where each key points to an array of { neighbor, distance } objects
+  // e.g., { 'A': [{ neighbor: 'B', distance: 2 }, { neighbor: 'C', distance: 3 }] }
 
-  
-  try {
+  let stack = [];  // Stack for DFS traversal
 
-    // Await the result from the Python script
-    const result = await runPythonScript("simplify_expression", arg1);
+  for (let node in graph) {
+      // Stack will contain [node, cumulativeDistance, visitedInCurrentPath]
+      stack.push([node, 0, new Set()]);
 
-    // Send the result back to the client
-    console.log("result");
-    res.json(result);
-  } catch (err) {
-    res.status(500).send(err.message);
+      while (stack.length > 0) {
+          let [currentNode, currentDistance, currentVisited] = stack.pop();
+
+          // If cumulative distance exceeds the threshold, return true
+          if (currentDistance > threshold) {
+              return true;
+          }
+
+          // Add current node to the current path's visited set
+          currentVisited.add(currentNode);
+
+          let neighbors = graph[currentNode];  // Get neighbors (outgoing edges)
+          if (neighbors) {
+              for (let { neighbor, distance } of neighbors) {
+                  // Cycle detection: if the neighbor is already in the current path
+                  if (currentVisited.has(neighbor)) {
+                      // Cycle detected
+                      return true;
+                  } else {
+                      // Clone the current visited set for the next path exploration
+                      let newVisited = new Set(currentVisited);
+                      stack.push([neighbor, currentDistance + distance, newVisited]);
+                  }
+              }
+          }
+          
+          // Remove current node from the current path's visited set after backtracking
+          currentVisited.delete(currentNode);
+      }
   }
-  console.log("message");
+
+  // No cycle found, and no path exceeds the threshold
+  return false;
+}
 
 
 
+function checkGraph(graph, threshold) {
+  const numNodes = graph.length;
+  const visited = new Array(numNodes).fill(false); // Track visited nodes
+  const inStack = new Array(numNodes).fill(false); // Track nodes currently in the stack (for cycle detection)
+  const distances = new Array(numNodes).fill(0); // Track distances of nodes from the start node
+
+  // Loop over each node in the graph
+  for (let node = 0; node < numNodes; node++) {
+      if (visited[node]) continue; // If the node is already visited, skip it
+
+      // Use an explicit stack for DFS (non-recursive)
+      const stack = [{ node: node, dist: 0 }]; // Each element in the stack contains the node and the current distance
+
+      while (stack.length > 0) {
+          const { node: currentNode, dist: currentDist } = stack[stack.length - 1]; // Peek the top of the stack
+
+          if (!visited[currentNode]) {
+              visited[currentNode] = true;
+              inStack[currentNode] = true;
+              distances[currentNode] = currentDist;
+          }
+
+          // If the current distance exceeds the threshold, return immediately
+          if (currentDist > threshold) {
+              return { result: 'Distance exceeds threshold' };
+          }
+
+          let hasUnvisitedNeighbor = false;
+
+          // Explore all neighbors
+          for (const [neighbor, weight] of graph[currentNode]) {
+              if (!visited[neighbor]) {
+                  stack.push({ node: neighbor, dist: currentDist + weight });
+                  hasUnvisitedNeighbor = true;
+                  break; // Process one neighbor at a time
+              } else if (inStack[neighbor]) {
+                  // If a neighbor is already in the stack, we've found a cycle
+                  return { result: 'Cycle detected' };
+              }
+          }
+
+          // If all neighbors are processed, backtrack
+          if (!hasUnvisitedNeighbor) {
+              inStack[currentNode] = false; // Backtracking, remove the node from the stack
+              stack.pop(); // Remove the node from the stack
+          }
+      }
+  }
+
+  // If we exit the loop without finding a cycle or exceeding the threshold, return "Neither"
+  return null;
+}
+
+app.post('/test', async (req, res) => {
+  // Example graph as an array of adjacency lists with distances
+  // Each element points to other nodes with distances: graph[i] = [[neighbor, distance], ...]
+  const graph = [
+    [[1, 3], [2, 5]], // Node 0 points to node 1 (distance 3) and node 2 (distance 5)
+    [[2, 2], [3, 4]], // Node 1 points to node 2 (distance 2) and node 3 (distance 4)
+    [[3, 5]],         // Node 2 points to node 3 (distance 1)
+    []          // Node 3 points back to node 0 (distance 6) forming a cycle
+  ];
+
+  const threshold = 10;
+  console.log(checkGraph(graph, threshold)); // Output: { result: 'Cycle detected' }
+
+  res.json("finished");
 });
