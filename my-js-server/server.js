@@ -461,7 +461,10 @@ function getNames() {
       allMediaRows.push(i);
     }
   }
-  for (let i0 = 1; i0 < allMediaRows.length; i0++) {
+}
+
+function setAllAttr() {
+  for (let i0 = 0; i0 < allMediaRows.length; i0++) {
     let i = allMediaRows[i0];
     let visited = new Set();
     for(let j of data[i].attributes) {
@@ -570,7 +573,7 @@ function addFormula(i, formula) {
 
 async function getConditions() {
   let optConds = false;
-  for (let i0 = 1; i0 < allMediaRows.length; i0++) {
+  for (let i0 = 0; i0 < allMediaRows.length; i0++) {
     let i = allMediaRows[i0];
     let formula = [];
     addFormula(i, formula);
@@ -608,161 +611,126 @@ async function getConditions() {
       }
     }
     
-
-
-    let formulaList = exprToList(replacedWithWords);
-    let stack = [...formulaList];
-    let output = [];
-    
-    while (stack.length > 0) {
-      let current = stack.shift();
-      
-      if (Array.isArray(current)) {
-        // Push the current array elements back to the stack, maintaining order
-        stack.unshift(...current);
-      } else {
-        // Process the non-array element (assuming it needs to be stored in the output)
-        let groups = reverseReplacements[current];
-        if(groups.after !== undefined) {
-          if(groups.max_d !== undefined) {
-            if(groups.min_d > groups.max_d) {
-              inconsist(i, j, `min_d greater than max_d.`, []);
-              return -1;
-            }
-            if(groups.min_d === 0 && groups.max_d === 0) {
-              inconsist(i, j, `min_d and max_d are both 0.`, []);
-              return -1;
-            }
+    for(let word in reverseReplacements) {
+      if (reverseReplacements.hasOwnProperty(word)) {
+        let groups = reverseReplacements[current][0];
+        if(groups.after === undefined) {
+          continue;
+        }
+        if(groups.max_d !== undefined) {
+          if(groups.min_d > groups.max_d) {
+            inconsist(i, j, `min_d greater than max_d.`, []);
+            return -1;
           }
-          if(groups.attrib_ref !== undefined) {
-            let refInd_val = checkBrack(i, j, 0, groups.attrib_ref, groups.attrib_ref_col);
-            if(refInd_val == -1) {
-              return -1;
-            }
-            if(refInd_val == -2) {
-              inconsist_removing_elem(i, j, k, `attribute "${val}" at ${getAddress(i, j)} not found.`);
-              return -1;
-            }
-            groups.attrib_ref = refInd_val;
+          if(groups.min_d === 0 && groups.max_d === 0) {
+            inconsist(i, j, `min_d and max_d are both 0.`, []);
+            return -1;
           }
-          let refInd_val = checkBrack(i, j, 0, groups.precedent, groups.precedent_col);
+        }
+        if(groups.attrib_ref !== undefined) {
+          let refInd_val = checkBrack(i, j, 0, groups.attrib_ref, groups.attrib_ref_col);
           if(refInd_val == -1) {
             return -1;
           }
-          groups.precedent_is_att = refInd_val !== -2;
-          if(groups.precedent_is_att) {
-            groups.precedent = refInd_val;
-          } else {
-            let found = false;
-            for(let m = 1; m < values.length; m++) {
-              for(let f = 0; f < values[m][nameInd].length; f++) {
-                if(values[m][nameInd][f] == groups.precedent) {
+          if(refInd_val == -2) {
+            inconsist_removing_elem(i, j, k, `attribute "${val}" at ${getAddress(i, j)} not found.`);
+            return -1;
+          }
+          groups.attrib_ref = refInd_val;
+        }
+        let refInd_val = checkBrack(i, j, 0, groups.precedent, groups.precedent_col);
+        if(refInd_val == -1) {
+          return -1;
+        }
+        groups.precedent_is_att = refInd_val !== -2;
+        if(groups.precedent_is_att) {
+          groups.precedent = refInd_val;
+        } else {
+          let found = false;
+          for(let m = 1; m < values.length; m++) {
+            for(let f = 0; f < values[m][nameInd].length; f++) {
+              if(values[m][nameInd][f] == groups.precedent) {
+                if(data[m].isAtt !== undefined) {
+                  groups.precedent_is_att = true;
+                  groups.precedent = data[m].isAtt;
+                } else {
                   groups.precedent = m;
-                  found = true;
-                  break;
                 }
-              }
-              if(found) {
+                found = true;
                 break;
               }
             }
-            if(!found) {
-              inconsist_removing_elem(i, j, 0, `precedent "${groups.precedent}" at ${getAddress(i, j)} not found.`);
-              return -1;
+            if(found) {
+              break;
             }
           }
+          if(!found) {
+            inconsist_removing_elem(i, j, 0, `precedent "${groups.precedent}" at ${getAddress(i, j)} not found.`);
+            return -1;
+          }
         }
-        output.push(groups);
+        if(groups.precedent_is_att) {
+          for(let rowHasAtt in attributes[groups.precedent]) {
+            const copyElement = {
+              ...groups
+            };
+            copyElement.precedent = rowHasAtt;
+            copyElement.precedent_is_att = false;
+            reverseReplacements[current].push(copyElement);
+          }
+        }
       }
     }
     
     for(let j = 0; j < direct_terms.lenght; j++) {
-      let groups = reverseReplacements[direct_terms[j]];
-      if(groups.after !== undefined) {
-        if(groups.max_d !== undefined && groups.max_d < 1) {
-          groups.min_d = -groups.max_d;
-          if(groups.min_d === undefined) {
-            groups.max_d = undefined;
-          } else {
-            groups.max_d = -groups.min_d;
+      for(let groups in reverseReplacements[direct_terms[j]]) {
+        if(groups.after !== undefined) {
+          if(groups.precedent_is_att) {
+            continue;
           }
-          replacedWithWords = replacedWithWords.replace(direct_terms[j], "true ");
-          data[groups.precedent].posteriors.append([i, groups.min_d, groups.max_d]);
-          data[i].ulteriors++;
-        } else if(groups.min_d !== undefined && groups.min_d > -1) {
-          data[i].posteriors.append([groups.precedent, groups.min_d, groups.max_d]);
-          data[groups.precedent].ulteriors++;
+          if(groups.max_d !== undefined && groups.max_d < 1) {
+            groups.min_d = -groups.max_d;
+            if(groups.min_d === undefined) {
+              groups.max_d = undefined;
+            } else {
+              groups.max_d = -groups.min_d;
+            }
+            replacedWithWords = replacedWithWords.replace(direct_terms[j] + " ", " true ");
+            data[groups.precedent].posteriors.append([i, groups.min_d, groups.max_d]);
+            data[i].ulteriors++;
+          } else if(groups.min_d !== undefined && groups.min_d > -1) {
+            data[i].posteriors.append([groups.precedent, groups.min_d, groups.max_d]);
+            data[groups.precedent].ulteriors++;
+          }
+        } else if(groups.position !== undefined) {
+          if(data[i].position !== undefined && data[i].position !== groups.position) {
+            inconsist(i, j, `position "${groups.position}" at ${getAddress(i, j)} is not unique.`, []);
+            return -1;
+          }
+          data[i].position = groups.position;
         }
-      } else if(groups.position !== undefined) {
-        if(data[i].position !== undefined && data[i].position !== groups.position) {
-          inconsist(i, j, `position "${groups.position}" at ${getAddress(i, j)} is not unique.`, []);
-          return -1;
-        }
-        data[i].position = groups.position;
       }
     }
     data[i].reverseReplacements = reverseReplacements;
     data[i].replacedWithWords = replacedWithWords;
   }
 
-  // check for cycles or exceed of list length
-  let visited = new Set();  // Track visited elements
-  let stack = [];  // Explicit stack for DFS
-  for (let i0 = 1; i0 < allMediaRows.length; i0++) {
-    let i = allMediaRows[i0];
-    if(data[i].ulteriors !== 0 || visited.has(i)) {
-      continue;
-    }
-
-    // Use a stack to track the current DFS path
-    let currentStack = [];
-    let currentVisited = new Set();
-    let lastPos = [allMediaRows.length];
-
-    stack.push(i);
-
-    while (stack.length > 0) {
-      let currentNode = stack.pop();
-
-      if (currentVisited.has(currentNode)) {
-        // Cycle detected
-        let cycle = [...currentStack.slice(currentStack.indexOf(currentNode)), currentNode];
-        inconsist(cycle[0], 0, `Cycle detected: ${cycle.map(index => `${values[index][nameInd][0]} (${index})`).join(" -> ")}.`, []);
-        return -1;
-      }
-
-      currentVisited.add(currentNode);  // Mark current node as visited in the current path
-      if(data[currentNode].position !== undefined) {
-        lastPos.push(data[currentNode].position);
-      } else {
-        let min_d = 1;
-        // if(data[currentNode].position !== undefined) {
-        //   if()
-        // }
-        lastPos.push(lastPos[lastPos.length - 1] - min_d);
-      }
-      visited.add(currentNode);  // Add to the global visited set
-
-      for(let neighbor of data[currentNode].posteriors) {
-        if (!visited.has(neighbor)) {
-          stack.push(neighbor);
-        }
-      }
-
-      // Remove currentNode from currentVisited after DFS on its neighbors
-      currentVisited.delete(currentNode);
-    }
+  let incoherence = checkGraph(data, allMediaRows.length);
+  if(incoherence !== null) {
+    inconsist(incoherence.row, 0, `Incoherence detected: ${incoherence.result}.`, []);
+    return -1;
   }
 
   // simplify the formulas
-  for (let i0 = 1; i0 < allMediaRows.length; i0++) {
+  for (let i0 = 0; i0 < allMediaRows.length; i0++) {
     let i = allMediaRows[i0];
-    let reverseReplacements = data[i].replacedWithWords;
+    let reverseReplacements = data[i].reverseReplacements;
+    let replacedWithWords = data[i].replacedWithWords;
     let simplified;
     try {
 
       // Await the result from the Python script
-      simplified = JSON.parse(await runPythonScript("simplify_expression", reverseReplacements));
+      simplified = JSON.parse(await runPythonScript("simplify_expression", replacedWithWords));
 
       // Send the result back to the client
       console.log("result");
@@ -782,7 +750,7 @@ async function getConditions() {
         stack.unshift(...current);
       } else {
         // Process the non-array element (assuming it needs to be stored in the output)
-        let groups = reverseReplacements[current];
+        let groups = reverseReplacements[current][0];
         output.push(groups);
       }
     }
@@ -834,6 +802,8 @@ async function check() {
   getAttributes();
 
   getNames();
+
+  setAllAttr();
 
   await getConditions();
 
@@ -2029,16 +1999,16 @@ function replaceWithSameWord(str) {
         if(groups.d2 !== undefined) {
           groups.max_d = groups.max_d;
         }
-        reverseReplacements[newWord] = {};
+        reverseReplacements[newWord] = [{}];
         
         // Loop through each key in the groups object and add it to reverseReplacements[newWord].groups
         for (let key in groups) {
             if (groups.hasOwnProperty(key)) {
-                reverseReplacements[newWord][key] = groups[key];
+                reverseReplacements[newWord][0][key] = groups[key];
             }
         }
       }
-      return replacements[match[0]];
+      return replacements[match[0]] + " ";
     } else {
       return item;
     }
@@ -2344,100 +2314,60 @@ function runPythonScript(pythonFile, arg1) {
 }
 
 
-function checkCycleAndExceeds(graph, threshold) {
-  // graph is an adjacency list where each key points to an array of { neighbor, distance } objects
-  // e.g., { 'A': [{ neighbor: 'B', distance: 2 }, { neighbor: 'C', distance: 3 }] }
-
-  let stack = [];  // Stack for DFS traversal
-
-  for (let node in graph) {
-      // Stack will contain [node, cumulativeDistance, visitedInCurrentPath]
-      stack.push([node, 0, new Set()]);
-
-      while (stack.length > 0) {
-          let [currentNode, currentDistance, currentVisited] = stack.pop();
-
-          // If cumulative distance exceeds the threshold, return true
-          if (currentDistance > threshold) {
-              return true;
-          }
-
-          // Add current node to the current path's visited set
-          currentVisited.add(currentNode);
-
-          let neighbors = graph[currentNode];  // Get neighbors (outgoing edges)
-          if (neighbors) {
-              for (let { neighbor, distance } of neighbors) {
-                  // Cycle detection: if the neighbor is already in the current path
-                  if (currentVisited.has(neighbor)) {
-                      // Cycle detected
-                      return true;
-                  } else {
-                      // Clone the current visited set for the next path exploration
-                      let newVisited = new Set(currentVisited);
-                      stack.push([neighbor, currentDistance + distance, newVisited]);
-                  }
-              }
-          }
-          
-          // Remove current node from the current path's visited set after backtracking
-          currentVisited.delete(currentNode);
-      }
-  }
-
-  // No cycle found, and no path exceeds the threshold
-  return false;
-}
-
-
 
 function checkGraph(graph, threshold) {
   const numNodes = graph.length;
   const visited = new Array(numNodes).fill(false); // Track visited nodes
   const inStack = new Array(numNodes).fill(false); // Track nodes currently in the stack (for cycle detection)
   const distances = new Array(numNodes).fill(0); // Track distances of nodes from the start node
+  const parent = new Array(numNodes).fill(null); // Track the parent of each node to reconstruct paths
 
   // Loop over each node in the graph
-  for (let node = 0; node < numNodes; node++) {
-      if (visited[node]) continue; // If the node is already visited, skip it
+  for (let i0 = 0; i0 < allMediaRows.length; i0++) {
+    let node = allMediaRows[i0];
+    if (visited[node]) continue; // If the node is already visited, skip it
 
-      // Use an explicit stack for DFS (non-recursive)
-      const stack = [{ node: node, dist: 0 }]; // Each element in the stack contains the node and the current distance
+    // Use an explicit stack for DFS (non-recursive)
+    const stack = [{ node: node, dist: 0, path: [node] }]; // Each stack element holds the node, distance, and path
 
-      while (stack.length > 0) {
-          const { node: currentNode, dist: currentDist } = stack[stack.length - 1]; // Peek the top of the stack
+    while (stack.length > 0) {
+      const { node: currentNode, dist: currentDist, path: currentPath } = stack[stack.length - 1]; // Peek the top of the stack
 
-          if (!visited[currentNode]) {
-              visited[currentNode] = true;
-              inStack[currentNode] = true;
-              distances[currentNode] = currentDist;
-          }
-
-          // If the current distance exceeds the threshold, return immediately
-          if (currentDist > threshold) {
-              return { result: 'Distance exceeds threshold' };
-          }
-
-          let hasUnvisitedNeighbor = false;
-
-          // Explore all neighbors
-          for (const [neighbor, weight] of graph[currentNode]) {
-              if (!visited[neighbor]) {
-                  stack.push({ node: neighbor, dist: currentDist + weight });
-                  hasUnvisitedNeighbor = true;
-                  break; // Process one neighbor at a time
-              } else if (inStack[neighbor]) {
-                  // If a neighbor is already in the stack, we've found a cycle
-                  return { result: 'Cycle detected' };
-              }
-          }
-
-          // If all neighbors are processed, backtrack
-          if (!hasUnvisitedNeighbor) {
-              inStack[currentNode] = false; // Backtracking, remove the node from the stack
-              stack.pop(); // Remove the node from the stack
-          }
+      if (!visited[currentNode]) {
+          visited[currentNode] = true;
+          inStack[currentNode] = true;
+          distances[currentNode] = currentDist;
       }
+
+      // If the current distance exceeds the threshold, return the path up to that point
+      if (currentDist > threshold) {
+          return { result: `Distance exceeds threshold : ${currentPath.join(' -> ')}`, row: currentNode};
+      }
+
+      let hasUnvisitedNeighbor = false;
+
+      // Explore all neighbors
+      for (const [neighbor, weight] of graph[currentNode]) {
+        if (inStack[neighbor]) {
+          // If a neighbor is already in the stack, we've found a cycle
+          const cyclePath = [...currentPath, neighbor];
+          return { result: `Cycle detected : ${cyclePath.join(' -> ')}`, row: currentNode};
+        }
+        if (!visited[neighbor] || data[neighbor].minDist < currentDist + weight) {
+            // Push the neighbor to the stack with the updated distance and path
+            stack.push({ node: neighbor, dist: currentDist + weight, path: [...currentPath, neighbor] });
+            parent[neighbor] = currentNode;
+            hasUnvisitedNeighbor = true;
+            break; // Process one neighbor at a time
+        }
+      }
+
+      // If all neighbors are processed, backtrack
+      if (!hasUnvisitedNeighbor) {
+          inStack[currentNode] = false; // Backtracking, remove the node from the stack
+          stack.pop(); // Remove the node from the stack
+      }
+    }
   }
 
   // If we exit the loop without finding a cycle or exceeding the threshold, return "Neither"
@@ -2451,10 +2381,10 @@ app.post('/test', async (req, res) => {
     [[1, 3], [2, 5]], // Node 0 points to node 1 (distance 3) and node 2 (distance 5)
     [[2, 2], [3, 4]], // Node 1 points to node 2 (distance 2) and node 3 (distance 4)
     [[3, 5]],         // Node 2 points to node 3 (distance 1)
-    []          // Node 3 points back to node 0 (distance 6) forming a cycle
+    [[0, 1]]          // Node 3 points back to node 0 (distance 6) forming a cycle
   ];
 
-  const threshold = 10;
+  const threshold = 11;
   console.log(checkGraph(graph, threshold)); // Output: { result: 'Cycle detected' }
 
   res.json("finished");
