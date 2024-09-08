@@ -539,16 +539,6 @@ async function getConditions() {
         if(groups.precedent === undefined) {
           continue;
         }
-        if(groups.max_d !== undefined) {
-          if(groups.min_d > groups.max_d) {
-            inconsist(i, 0, `min_d greater than max_d.`, []);
-            return -1;
-          }
-          if(groups.min_d === 0 && groups.max_d === 0) {
-            inconsist(i, 0, `min_d and max_d are both 0.`, []);
-            return -1;
-          }
-        }
         if(groups.attrib_ref !== undefined) {
           let refInd_val = checkBrack(i, 0, 0, groups.attrib_ref, groups.attrib_ref_col);
           if(refInd_val == -1) {
@@ -620,10 +610,10 @@ async function getConditions() {
               groups.max_d = -groups.min_d;
             }
             replacedWithWords = replacedWithWords.replace(direct_terms[j] + " ", " true ");
-            data[groups.precedent].posteriors.append([i, groups.min_d, groups.max_d]);
+            data[groups.precedent].posteriors.push([i, groups.min_d, groups.max_d]);
             data[i].ulteriors++;
           } else if(groups.min_d !== undefined && groups.min_d > -1) {
-            data[i].posteriors.append([groups.precedent, groups.min_d, groups.max_d]);
+            data[i].posteriors.push([groups.precedent, groups.min_d, groups.max_d]);
             data[groups.precedent].ulteriors++;
           }
         } else if(groups.position !== undefined) {

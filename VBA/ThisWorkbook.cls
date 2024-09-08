@@ -47,12 +47,16 @@ Private Sub Workbook_Open()
     labelWidth = 114
     avgCharWidth = 6 ' Adjust this value based on your font size and type
 
-    RunAndWait ("cmd.exe /C C:\Users\abarb\Documents\health\news_underground\mediaSorter\programs\excel_prog\mediaSorter\stopNodeJS.bat")
-    
-    Call Shell("cmd.exe /C C:\Users\abarb\Documents\health\news_underground\mediaSorter\programs\excel_prog\mediaSorter\startNodeJS.bat", vbHide)
+    ' RunAndWait ("cmd.exe /C C:\Users\abarb\Documents\health\news_underground\mediaSorter\programs\excel_prog\mediaSorter\stopNodeJS.bat")
+
+
+    RunCmdAndWait
+    Call Shell("cmd.exe /C C:\Users\abarb\Documents\health\news_underground\mediaSorter\programs\excel_prog\mediaSorter\startNodeJS.bat")
+    MsgBox "start."
+    ' Call Shell("cmd.exe /C C:\Users\abarb\Documents\health\news_underground\mediaSorter\programs\excel_prog\mediaSorter\startNodeJS.bat", vbHide)
     
     Dim check As String
-    check = checkSendRequestToNodeJSEndpoint
+    check = SendRequestToNodeJSEndpoint
     If check = "Request timed out." Then
         MsgBox "The server is not responding. Please make sure the Node.js server is running."
         Exit Sub
@@ -118,6 +122,22 @@ Private Sub Workbook_Open()
     ClearTextFile logFile
     Workbook_SheetActivate activeSheet
 End Sub
+
+Sub RunCmdAndWait()
+    Dim wsh As Object
+    Dim exitCode As Integer
+    Dim cmd As String
+
+    ' Create WScript.Shell object
+    Set wsh = CreateObject("WScript.Shell")
+
+    ' Specify the command (path to your batch file)
+    cmd = "C:\Users\abarb\Documents\health\news_underground\mediaSorter\programs\excel_prog\mediaSorter\stopNodeJS.bat"
+
+    ' Run the command and wait for it to complete
+    exitCode = wsh.Run("cmd.exe /C """ & cmd & """", 0, True) ' vbHide is 0
+End Sub
+
 
 Public Sub CheckHttpResponse()
     Dim http As Object
@@ -634,7 +654,7 @@ Function SendRequestToNodeJSEndpoint()
     Dim res As String
     
     ' Define your endpoint URL
-    url = "http://localhost:3000/checkServer"
+    url = "http://localhost:3000/health"
     
     ' Define the timeout duration (in seconds)
     timeOutSeconds = 5 ' 30 seconds timeout
@@ -674,7 +694,7 @@ Function SendRequestToNodeJSEndpoint()
     ' Clean up
     Set xmlhttp = Nothing
     SendRequestToNodeJSEndpoint = res
-End Sub
+End Function
 
 
 
