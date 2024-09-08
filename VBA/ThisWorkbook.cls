@@ -47,16 +47,18 @@ Private Sub Workbook_Open()
     labelWidth = 114
     avgCharWidth = 6 ' Adjust this value based on your font size and type
 
-    ' RunAndWait ("cmd.exe /C C:\Users\abarb\Documents\health\news_underground\mediaSorter\programs\excel_prog\mediaSorter\stopNodeJS.bat")
-
 
     RunCmdAndWait
-    Call Shell("cmd.exe /C C:\Users\abarb\Documents\health\news_underground\mediaSorter\programs\excel_prog\mediaSorter\startNodeJS.bat")
-    MsgBox "start."
     ' Call Shell("cmd.exe /C C:\Users\abarb\Documents\health\news_underground\mediaSorter\programs\excel_prog\mediaSorter\startNodeJS.bat", vbHide)
+    Call Shell("cmd.exe /C C:\Users\abarb\Documents\health\news_underground\mediaSorter\programs\excel_prog\mediaSorter\startNodeJS.bat")
     
     Dim check As String
     check = SendRequestToNodeJSEndpoint
+    If check = "Request timed out." Then
+        MsgBox "The server is not responding. Please make sure the Node.js server is running."
+        Exit Sub
+    End If
+    check = SendRequestToNodeJSEndpoint2
     If check = "Request timed out." Then
         MsgBox "The server is not responding. Please make sure the Node.js server is running."
         Exit Sub
@@ -390,6 +392,12 @@ Public Sub CheckHttpResponse()
             Else
                 MsgBox "Error: " & http.statusText
                 requests.Remove j
+                Dim check As String
+                check = SendRequestToNodeJSEndpoint2
+                If check = "Request timed out." Then
+                    MsgBox "The server is not responding. Please make sure the Node.js server is running."
+                    Exit Sub
+                End If
             End If
         End If
     Next j
@@ -694,6 +702,61 @@ Function SendRequestToNodeJSEndpoint()
     ' Clean up
     Set xmlhttp = Nothing
     SendRequestToNodeJSEndpoint = res
+End Function
+
+Function SendRequestToNodeJSEndpoint2()
+    Dim xmlhttp As Object
+    Dim url As String
+    Dim startTime As Double
+    Dim timeOutSeconds As Double
+    Dim responseReceived As Boolean
+    Dim res As String
+    
+    ' Define your endpoint URL
+    url = "http://localhost:3000/test"
+    
+    ' Define the timeout duration (in seconds)
+    timeOutSeconds = 5 ' 30 seconds timeout
+    
+    ' Record the start time
+    startTime = Timer
+    
+    ' Initialize the response flag
+    responseReceived = False
+    
+    Do
+        ' Create an XMLHTTP object
+        Set xmlhttp = CreateObject("MSXML2.XMLHTTP")
+        
+        ' Send the HTTP GET request to the Node.js server
+        xmlhttp.Open "POST", url, False
+        
+        ' Set the request headers
+        xmlhttp.setRequestHeader "Content-Type", "application/json"
+        
+        xmlhttp.Send
+        
+        ' Check if the request was successful
+        If xmlhttp.Status = 200 Then
+            responseReceived = True
+            res = "Response received: " & xmlhttp.responseText
+            Exit Do
+        End If
+        
+        ' Check if the timeout has been reached
+        If Timer - startTime > timeOutSeconds Then
+            res = "Request timed out."
+            Exit Do
+        End If
+        
+        ' Wait for a short interval before retrying
+        Application.Wait (Now + TimeValue("00:00:01"))
+        
+    Loop Until responseReceived
+    
+    ' Clean up
+    Set xmlhttp = Nothing
+    SendRequestToNodeJSEndpoint2 = res
 End Function
 
 

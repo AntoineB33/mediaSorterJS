@@ -2,7 +2,7 @@ const express = require('express');
 const fs = require('fs');
 const { exec } = require('child_process');
 const path = require('path');
-const abcPath = path.resolve('../abc-master/abc-master/abc');
+const util = require('util');
 const app = express();
 const port = 3000;
 // Middleware to parse JSON bodies
@@ -53,6 +53,12 @@ var attNames;
 // [node.js]
 var response;
 
+// Convert exec into a promise-based function for async/await
+const execPromise = util.promisify(exec);
+
+// Define the path to the C executable
+const exePath = path.join('C:', 'Users', 'abarb', 'source', 'repos', 'mediaSorter', 'x64', 'Debug', 'mediaSorter.exe');
+
 
 const allColumnTypes = {
   CONDITIONS: 1,
@@ -80,6 +86,13 @@ class Node {
     }
 }
 
+
+// Function to call the C program with a list of numbers
+async function callCProgram(numbers) {
+  const args = numbers.join(' '); // Convert list of numbers to argument string
+  const { stdout } = await execPromise(`"${exePath}" ${args}`);
+  return stdout.trim().split(' ').map(Number); // Parse the result into an array of numbers
+}
 
 /**
  * Converts a given 0-based integer to its corresponding Excel column tag.
@@ -347,7 +360,7 @@ function checkBrack(i, j, k, val, columnTitle) {
 
 function initializeData() {
   for (let i = 1; i < nbLineBef; i++) {
-    data.push({attributes: new Set(), posteriors: [], ulteriors: 0, minDist: 0});
+    data.push({attributes: new Set(), posteriors: [], ulteriors: 0, minDist: 0, maxDist: Infinity});
     // check if a non-empty row has no name
     if(!values[i][nameInd].length) {
       for (let j = 0; j < values[i].length; j++) {
@@ -631,10 +644,18 @@ async function getConditions() {
 
   let incoherence = checkGraph(data, allMediaRows.length);
   if(incoherence !== null) {
-    inconsist(incoherence.row, 0, `Incoherence detected: ${incoherence.result}.`, []);
+    inconsist(incoherence.row, 0, incoherence.result, []);
     return -1;
   }
 
+  let newInds = [];
+  let a = 0;
+  for (let i = 1; i < nbLineBef; i++) {
+    newInds.push(a);
+    if(!data[i].isAtt) {
+      a++;
+    }
+  }
   // simplify the formulas
   for (let i0 = 0; i0 < allMediaRows.length; i0++) {
     let i = allMediaRows[i0];
@@ -652,10 +673,22 @@ async function getConditions() {
       }
 
       let formulaList = transformLogicalFormula(getTrimmedResult(simplified));
-      transformTerms(formulaList, exampleTransform, reverseReplacements);
+      transformTerms(formulaList, exampleTransform, reverseReplacements, newInds);
     }
     data[i].conditions = output;
   }
+
+  const iterations = 3;  // Example: Call C program 3 times
+  const allResults = [];
+
+  // Loop to call the C program multiple times
+  for (let i = 0; i < iterations; i++) {
+      const numbers = [i + 1, (i + 1) * 2, (i + 1) * 3]; // Example input for each iteration
+      console.log(`Calling C program with input: ${numbers}`);
+      const result = await callCProgram(numbers);
+      allResults.push(result);  // Collect results from each call
+  }
+  console.log(allResults);
 }
 
 async function check() {
@@ -1952,223 +1985,7 @@ app.post('/execute', async (req, res) => {
   res.json(response);
 });
 
-
-
-// Function to simplify boolean expressions using ABC
-function simplifyExpression(expression, callback) {
-  const abcCommand = `echo "read ${expression}; strash; mfs; print_stats; quit;" | ${abcPath}`;
-  exec(abcCommand, (error, stdout, stderr) => {
-      if (error) {
-          console.error(`Error: ${error.message}`);
-          callback(null, error.message);
-          return;
-      }
-      if (stderr) {
-          console.error(`Stderr: ${stderr}`);
-          callback(null, stderr);
-          return;
-      }
-      // Process the output from ABC and extract simplified logic
-      const simplifiedExpr = stdout; // Process according to ABC's output format
-      callback(simplifiedExpr, null);
-  });
-}
-
-
-const jsep = require('jsep');
-
-function extractLinkedTerms(formula) {
-  // Parse the formula into an AST
-  const ast = jsep(formula);
-
-  const linkedTerms = new Set();
-
-  function traverse(node) {
-      if (node.type === 'BinaryExpression') {
-          // Traverse both sides of the binary expression
-          traverse(node.left);
-          traverse(node.right);
-      } else if (node.type === 'UnaryExpression') {
-          // If it's a 'not' expression, skip it
-          // We don't want to add negated terms
-          if (node.operator !== 'not') {
-              traverse(node.argument);
-          }
-      } else if (node.type === 'Identifier') {
-          // Add the term to the set
-          linkedTerms.add(node.name);
-      }
-  }
-
-  // Start traversal from the root of the AST
-  traverse(ast);
-
-  return Array.from(linkedTerms);
-}
-
 const { PythonShell } = require('python-shell');
-
-
-function parseLogicalFormula(formula) {
-  // Remove spaces
-  formula = formula.replace(/\s+/g, '');
-
-  function parseExpression(expression) {
-      let stack = [];
-      let currentOp = null;
-      
-      let i = 0;
-
-      while (i < expression.length) {
-          const char = expression[i];
-
-          if (char === '(') {
-              // Find the matching closing parenthesis
-              let openBrackets = 1;
-              let startIndex = i + 1;
-              i++;
-              while (openBrackets > 0 && i < expression.length) {
-                  if (expression[i] === '(') openBrackets++;
-                  if (expression[i] === ')') openBrackets--;
-                  i++;
-              }
-              const subExpr = expression.slice(startIndex, i - 1);
-              const parsedSubExpr = parseExpression(subExpr);
-              if (currentOp) {
-                  currentOp.push(parsedSubExpr);
-              } else {
-                  stack.push(parsedSubExpr);
-              }
-          } else if (char === '!') {
-              // Handle NOT operator
-              i++;
-              if (expression[i] === '(') {
-                  let openBrackets = 1;
-                  let startIndex = i + 1;
-                  i++;
-                  while (openBrackets > 0 && i < expression.length) {
-                      if (expression[i] === '(') openBrackets++;
-                      if (expression[i] === ')') openBrackets--;
-                      i++;
-                  }
-                  const subExpr = expression.slice(startIndex, i - 1);
-                  stack.push([0, '!', parseExpression(subExpr)]);
-              } else {
-                  let operand = '';
-                  while (i < expression.length && /[a-zA-Z]/.test(expression[i])) {
-                      operand += expression[i];
-                      i++;
-                  }
-                  stack.push([0, '!', operand]);
-              }
-          } else if (char === '|' && expression[i + 1] === '|') {
-              // Handle OR operator
-              i += 2;
-              const left = currentOp || stack.pop();
-              currentOp = [0, left];
-              stack.push(currentOp);
-          } else if (char === '&' && expression[i + 1] === '&') {
-              // Handle AND operator
-              i += 2;
-              const left = currentOp || stack.pop();
-              currentOp = [-1, left];
-              stack.push(currentOp);
-          } else if (/[a-zA-Z]/.test(char)) {
-              // Handle variables (a, b, c, ...)
-              let variable = '';
-              while (i < expression.length && /[a-zA-Z]/.test(expression[i])) {
-                  variable += expression[i];
-                  i++;
-              }
-              if (currentOp) {
-                  currentOp.push(variable);
-                  currentOp = null;
-              } else {
-                  stack.push(variable);
-              }
-          } else {
-              i++;
-          }
-      }
-
-      // Reduce the stack based on operator precedence
-      return stack.length === 1 ? stack[0] : stack;
-  }
-
-  return parseExpression(formula);
-}
-
-const math = require('mathjs');
-
-function evaluateExpression(expressionStr, scope) {
-  // Replace variable names with their corresponding boolean values from the scope
-  Object.keys(scope).forEach(varName => {
-      const value = scope[varName];
-      const regex = new RegExp(`\\b${varName}\\b`, 'g');
-      expressionStr = expressionStr.replace(regex, value);
-  });
-
-  // Replace logical operators with JavaScript equivalents
-  expressionStr = expressionStr
-      .replace(/&&/g, '&&')
-      .replace(/\|\|/g, '||')
-      .replace(/!/g, '!')
-      .replace(/true/g, 'true')
-      .replace(/false/g, 'false');
-
-  // Use Function constructor to evaluate the logical expression
-  return new Function(`return ${expressionStr};`)();
-}
-
-function findFalseTerms(expressionStr) {
-  // Extract variables from the expression (assuming variables are single letters)
-  const variables = expressionStr.match(/[A-Za-z]\b/g);
-  const uniqueVariables = [...new Set(variables)]; // Get unique variables
-
-  let falseTerms = [];
-
-  uniqueVariables.forEach(varName => {
-      // Create a scope where this variable is false
-      let scope = {};
-      scope[varName] = false;
-
-      // Evaluate the expression with the current variable set to false
-      const result = evaluateExpression(expressionStr, scope);
-
-      // If the result is false, add this variable to the falseTerms array
-      if (!result) {
-          falseTerms.push(varName);
-      }
-  });
-
-  return falseTerms;
-}
-
-
-// Function to call Python script and return a promise
-function runPythonScript0(pythonFile, arg1) {
-  return new Promise((resolve, reject) => {
-    const options = {
-      mode: 'json',
-      pythonOptions: ['-u'], // Unbuffered stdout
-      scriptPath: './', // Directory where the script is located
-    };
-
-    const pyshell = new PythonShell(pythonFile + ".py", options);
-
-    // Send data to the Python script
-    pyshell.send({ arg1 });
-
-    // Receive output from the Python script
-    pyshell.on('message', (message) => {
-      resolve(message); // Resolve the promise with the message (result) from Python
-    });
-
-    pyshell.end((err) => {
-      if (err) reject(err); // Reject the promise if there's an error
-    });
-  });
-}
 
 function runPythonScript(pythonFile, arg1) {
   return new Promise((resolve, reject) => {
@@ -2198,7 +2015,8 @@ function checkGraph(graph, threshold) {
   const numNodes = graph.length;
   const visited = new Array(numNodes).fill(false); // Track visited nodes
   const inStack = new Array(numNodes).fill(false); // Track nodes currently in the stack (for cycle detection)
-  const distances = new Array(numNodes).fill(0); // Track distances of nodes from the start node
+  const minDistances = new Array(numNodes).fill(0); // Track minimum distances of nodes from the start node
+  const maxDistances = new Array(numNodes).fill(0); // Track maximum distances of nodes from the start node
   const parent = new Array(numNodes).fill(null); // Track the parent of each node to reconstruct paths
 
   // Loop over each node in the graph
@@ -2207,33 +2025,40 @@ function checkGraph(graph, threshold) {
     if (visited[node]) continue; // If the node is already visited, skip it
 
     // Use an explicit stack for DFS (non-recursive)
-    const stack = [{ node: node, dist: 0, path: [node] }]; // Each stack element holds the node, distance, and path
+    const stack = [{ node: node, minDist: 0, maxDist: Infinity, path: [node] }]; // Each stack element holds the node, distance, and path
 
     while (stack.length > 0) {
-      const { node: currentNode, dist: currentDist, path: currentPath } = stack[stack.length - 1]; // Peek the top of the stack
+      const { node: currentNode, minDist: currentMinDist, maxDist: currentMaxDist, path: currentPath } = stack[stack.length - 1]; // Peek the top of the stack
 
       visited[currentNode] = true;
       inStack[currentNode] = true;
-      distances[currentNode] = currentDist;
-      data[currentNode].minDist = Math.max(data[currentNode].minDist, currentDist);
+      minDistances[currentNode] = currentMinDist;
+      maxDistances[currentNode] = currentMaxDist;
+      data[currentNode].minDist = Math.max(data[currentNode].minDist, currentMinDist);
+      data[currentNode].maxDist = Math.min(data[currentNode].maxDist, currentMaxDist);
 
       // If the current distance exceeds the threshold, return the path up to that point
-      if (currentDist > threshold) {
-          return { result: `Distance exceeds threshold : ${currentPath.join(' -> ')}`, row: currentNode};
+      if (currentMinDist > threshold) {
+        return { result: `Distance exceeds threshold : ${currentPath.join(' -> ')}`, row: currentNode};
+      }
+      if (data[currentNode].position !== undefined && (data[currentNode].position < currentMinDist || data[currentNode].position > currentMaxDist)) {
+        return { result: `Position out of range : ${currentPath.join(' -> ')}`, row: currentNode};
       }
 
       let hasUnvisitedNeighbor = false;
 
       // Explore all neighbors
-      for (const [neighbor, weight, max_d] of graph[currentNode].posteriors) {
+      for (const [neighbor, min_d, max_d] of graph[currentNode].posteriors) {
         if (inStack[neighbor]) {
           // If a neighbor is already in the stack, we've found a cycle
-          const cyclePath = [...currentPath, neighbor];
+          let cyclePath = [...currentPath, neighbor];
+          const index = cyclePath.indexOf(neighbor);
+          cyclePath = cyclePath.slice(index);
           return { result: `Cycle detected : ${cyclePath.join(' -> ')}`, row: currentNode};
         }
-        if (!visited[neighbor] || data[neighbor].minDist < currentDist + weight) {
+        if (!visited[neighbor] || data[neighbor].minDist < currentMinDist + min_d) {
             // Push the neighbor to the stack with the updated distance and path
-            stack.push({ node: neighbor, dist: currentDist + weight, path: [...currentPath, neighbor] });
+            stack.push({ node: neighbor, minDist: currentMinDist + min_d, maxDist: currentMaxDist + max_d, path: [...currentPath, neighbor] });
             parent[neighbor] = currentNode;
             hasUnvisitedNeighbor = true;
             break; // Process one neighbor at a time
@@ -2253,10 +2078,10 @@ function checkGraph(graph, threshold) {
 }
 
 
-function transformTerms(expression, transformFunc, reverseReplacements) {
+function transformTerms(expression, transformFunc, reverseReplacements, newInds) {
   // If it's a string (a variable), apply the transformation function
   if (typeof expression === 'string') {
-      return transformFunc(reverseReplacements, expression);
+      return transformFunc(reverseReplacements, newInds, expression);
   }
 
   // If it's an array, it represents an operator and its operands
@@ -2264,14 +2089,18 @@ function transformTerms(expression, transformFunc, reverseReplacements) {
   const operands = expression.slice(expression[1]==='!'?2:1);
 
   // Recursively apply the transform function to each operand
-  const transformedOperands = operands.map(operand => transformTerms(operand, transformFunc, reverseReplacements));
+  const transformedOperands = operands.map(operand => transformTerms(operand, transformFunc, reverseReplacements, newInds));
 
   // Return the transformed operation (operator + transformed operands)
   return [operator, ...transformedOperands];
 }
 
-function exampleTransform(reverseReplacements, term) {
-  return reverseReplacements[term][0];
+function exampleTransform(reverseReplacements, newInd, term) {
+  let groups = reverseReplacements[term][0];
+  if(groups.precedent_is_att === false) {
+    groups.precedent = newInd[groups.precedent];
+  }
+  return ;
 }
 
 function transformLogicalFormula(tokens) {
@@ -2332,8 +2161,8 @@ function transformLogicalFormula(tokens) {
 
 app.post('/test', async (req, res) => {
   // Example usage:
-  let formula = ["!", "(", "a", "&&", "b", "&&", "c", "||", "d", "||", "e", ")"];
-  console.log(JSON.stringify(transformLogicalFormula(formula), null, 2));
+  // let formula = ["!", "(", "a", "&&", "b", "&&", "c", "||", "d", "||", "e", ")"];
+  // console.log(JSON.stringify(transformLogicalFormula(formula), null, 2));
 
   res.json("finished");
 });
