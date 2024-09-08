@@ -345,28 +345,9 @@ function checkBrack(i, j, k, val, columnTitle) {
   return isAtt;
 }
 
-// Function to convert the Formula object into a nested list structure
-function formulaToList(formula, reverseReplacements) {
-  if (formula.isVar()) {
-      return formula.name; // Return the variable name as a string
-  } else if (formula.isNot()) {
-      return [0, "not", formulaToList(formula.formula, reverseReplacements)]; // Negation with nested formula
-  } else if (formula.isAnd()) {
-      return ["and", ...formula.terms.map(term => formulaToList(term, reverseReplacements))]; // Conjunction of terms
-  } else if (formula.isOr()) {
-      return ["or", ...formula.terms.map(term => formulaToList(term, reverseReplacements))]; // Disjunction of terms
-  } else if (formula.isTrue()) {
-      return "true"; // Return "true" for true constant
-  } else if (formula.isFalse()) {
-      return "false"; // Return "false" for false constant
-  } else {
-      throw new Error("Unknown formula type");
-  }
-}
-
 function initializeData() {
   for (let i = 1; i < nbLineBef; i++) {
-    data.push({attributes: new Set(), conditions: [], reverseReplacements: [], newWords: [], posteriors: [], ulteriors: 0, minDist: 0});
+    data.push({attributes: new Set(), posteriors: [], ulteriors: 0, minDist: 0});
     // check if a non-empty row has no name
     if(!values[i][nameInd].length) {
       for (let j = 0; j < values[i].length; j++) {
@@ -383,6 +364,8 @@ function initializeData() {
 
 function getAttributes() {
   // attributes
+  let accAttr = {};
+  let acc = 0;
   for (let j = 0; j < colNumb; j++) {
     let colTitle = values0[sheetCodeName][0][j];
     if(colTitle !== null){
@@ -436,7 +419,7 @@ function getNames() {
         if(refInd_val == -1) {
           return -1;
         }
-        valuesI[k] = '"' + val + '"' + (match.groups.columnTitle===undefined?"":'["' + match.groups.columnTitle + '"]');
+        valuesI[k] = val + (match.groups.columnTitle===undefined?"":'[' + match.groups.columnTitle + ']');
       }
       if(match === null || refInd_val === -2) {
         // check if the name is already used
@@ -492,63 +475,6 @@ function setAllAttr() {
   }
 }
 
-function exprToList(expr) {
-  // Remove any extra whitespace for easier processing
-  expr = expr.replace(/\s+/g, '');
-
-  // Helper function to check if a character is a letter (a variable in the expression)
-  function isLetter(c) {
-      return c >= 'a' && c <= 'z' || c >= 'A' && c <= 'Z';
-  }
-
-  // Recursive function to process the expression
-  function parseExpression(expr) {
-      let stack = [];
-      let i = 0;
-
-      while (i < expr.length) {
-          let char = expr[i];
-
-          if (char === '(') {
-              // Find the matching closing parenthesis
-              let j = i;
-              let parenCount = 0;
-              while (j < expr.length) {
-                  if (expr[j] === '(') parenCount++;
-                  if (expr[j] === ')') parenCount--;
-                  if (parenCount === 0) break;
-                  j++;
-              }
-
-              // Recursively parse the expression within the parentheses
-              stack.push(parseExpression(expr.slice(i + 1, j)));
-              i = j;
-          } else if (isLetter(char)) {
-              // Push the variable as a string
-              stack.push(char);
-          } else if (char === '&') {
-              stack.push(-1); // Represent AND with -1
-          } else if (char === '|') {
-              stack.push(0); // Represent OR with 0
-          } else if (char === '~') {
-              stack.push(2); // Represent NOT with 2
-          }
-
-          i++;
-      }
-
-      // If there's only one item in the stack, return it as the result
-      if (stack.length === 1) {
-          return stack[0];
-      }
-
-      return stack;
-  }
-
-  // Parse the entire expression
-  return parseExpression(expr);
-}
-
 function addFormula(i, formula) {
   for (let j = 0; j < colNumb; j++) {
     if (columnTypes[j] == allColumnTypes.CONDITIONS) {
@@ -584,25 +510,21 @@ async function getConditions() {
     let replacedWithWords;
     let reverseReplacements;
     try{
-      let reverseReplacementsI;
-      ({replacedWithWords, reverseReplacementsI} = replaceWithSameWord(formula));
-      reverseReplacements = reverseReplacementsI;
+      ({replacedWithWords, reverseReplacements} = replaceWithSameWord(formula));
     } catch(error) {
-      inconsist(i, j, error.message, []);
+      inconsist(i, 0, error.message, []);
       return;
     }
     
-    let direct_terms;
-    try {
+    let direct_terms = [];
+    if(replacedWithWords!==undefined) {
+      try {
 
-      // Await the result from the Python script
-      direct_terms = JSON.parse(await runPythonScript("test_direct", replacedWithWords));
-
-      // Send the result back to the client
-      console.log("result");
-    } catch (err) {
-      inconsist_removing_elem(i, j, 0, `incorrect condition : ${err.message}.`);
-      return -1;
+        direct_terms = await runPythonScript("test_direct", replacedWithWords)
+      } catch (err) {
+        inconsist(i, 0, `incorrect condition : ${err.message}.`, []);
+        return -1;
+      }
     }
     if(!optConds) {
       const maxWord = direct_terms.reduce((max, item) => (item.value > max ? item.value : max), -Infinity);
@@ -613,32 +535,32 @@ async function getConditions() {
     
     for(let word in reverseReplacements) {
       if (reverseReplacements.hasOwnProperty(word)) {
-        let groups = reverseReplacements[current][0];
+        let groups = reverseReplacements[word][0];
         if(groups.after === undefined) {
           continue;
         }
         if(groups.max_d !== undefined) {
           if(groups.min_d > groups.max_d) {
-            inconsist(i, j, `min_d greater than max_d.`, []);
+            inconsist(i, 0, `min_d greater than max_d.`, []);
             return -1;
           }
           if(groups.min_d === 0 && groups.max_d === 0) {
-            inconsist(i, j, `min_d and max_d are both 0.`, []);
+            inconsist(i, 0, `min_d and max_d are both 0.`, []);
             return -1;
           }
         }
         if(groups.attrib_ref !== undefined) {
-          let refInd_val = checkBrack(i, j, 0, groups.attrib_ref, groups.attrib_ref_col);
+          let refInd_val = checkBrack(i, 0, 0, groups.attrib_ref, groups.attrib_ref_col);
           if(refInd_val == -1) {
             return -1;
           }
           if(refInd_val == -2) {
-            inconsist_removing_elem(i, j, k, `attribute "${val}" at ${getAddress(i, j)} not found.`);
+            inconsist(i, 0, `attribute "${val}" at row ${i + 1} not found.`, []);
             return -1;
           }
           groups.attrib_ref = refInd_val;
         }
-        let refInd_val = checkBrack(i, j, 0, groups.precedent, groups.precedent_col);
+        let refInd_val = checkBrack(i, 0, 0, groups.precedent, groups.precedent_col);
         if(refInd_val == -1) {
           return -1;
         }
@@ -665,25 +587,27 @@ async function getConditions() {
             }
           }
           if(!found) {
-            inconsist_removing_elem(i, j, 0, `precedent "${groups.precedent}" at ${getAddress(i, j)} not found.`);
+            inconsist(i, 0, `precedent "${groups.precedent}" at row ${i + 1} not found.`, []);
             return -1;
           }
         }
         if(groups.precedent_is_att) {
-          for(let rowHasAtt in attributes[groups.precedent]) {
+          for(let k = 0; k < attributes[groups.precedent].length; k++) {
+            let rowHasAtt = attributes[groups.precedent][k];
             const copyElement = {
               ...groups
             };
             copyElement.precedent = rowHasAtt;
             copyElement.precedent_is_att = false;
-            reverseReplacements[current].push(copyElement);
+            reverseReplacements[word].push(copyElement);
           }
         }
       }
     }
     
-    for(let j = 0; j < direct_terms.lenght; j++) {
-      for(let groups in reverseReplacements[direct_terms[j]]) {
+    for(let j = 0; j < direct_terms.length; j++) {
+      for(let k = 0; k < reverseReplacements[direct_terms[j]].length; k++) {
+        let groups = reverseReplacements[direct_terms[j]][k];
         if(groups.after !== undefined) {
           if(groups.precedent_is_att) {
             continue;
@@ -726,78 +650,32 @@ async function getConditions() {
     let i = allMediaRows[i0];
     let reverseReplacements = data[i].reverseReplacements;
     let replacedWithWords = data[i].replacedWithWords;
-    let simplified;
-    try {
-
-      // Await the result from the Python script
-      simplified = JSON.parse(await runPythonScript("simplify_expression", replacedWithWords));
-
-      // Send the result back to the client
-      console.log("result");
-    } catch (err) {
-      inconsist_removing_elem(i, j, 0, `incorrect condition : ${err.message}.`);
-      return -1;
-    }
-    let formulaList = exprToList(simplified);
-    let stack = [...formulaList];
+    let simplified = [];
     let output = [];
-    
-    while (stack.length > 0) {
-      let current = stack.shift();
-      
-      if (Array.isArray(current)) {
-        // Push the current array elements back to the stack, maintaining order
-        stack.unshift(...current);
-      } else {
-        // Process the non-array element (assuming it needs to be stored in the output)
-        let groups = reverseReplacements[current][0];
-        output.push(groups);
+    if(replacedWithWords !== undefined) {
+      try {
+        // Await the result from the Python script
+        simplified = await runPythonScript("simplify_expression", replacedWithWords);
+      } catch (err) {
+        inconsist(i, 0, `incorrect condition : ${err.message}.`, []);
+        return -1;
       }
+
+      let formulaList = transformLogicalFormula(getTrimmedResult(simplified));
+      transformTerms(formulaList, exampleTransform, reverseReplacements);
     }
     data[i].conditions = output;
   }
 }
 
-function getSimplifiedCond() {
-
-}
-
-function applyCondAttToAllRows() {
-  // apply conditions to an attribute to all the rows having the attribute
-  for(let i = 1; i < nbLineBef; i++) {
-    if(!Number.isInteger(data[i])) {
-      for(let j = data[i].conditions.length - 1; j > -1; j--) {
-        let cond = data[i].conditions[j];
-        let att = -1;
-        if(cond.precedent_is_att) {
-          att = cond.precedent;
-        } else if(Number.isInteger(data[cond])) {
-          att = data[cond];
-        }
-        if(att !== -1) {
-          for(let m of attributes[att]) {
-            cond.precedent = m;
-            data[i].conditions.push(cond);
-          }
-          data[i].conditions.splice(j, 1);
-        }
-      }
-    }
-  }
-}
-
 async function check() {
   resolved[sheetCodeName] = false;
-  let found;
   
   data = [-1];
-  var r;
 
   initializeData();
   stop = false;
   attributes = [];
-  let acc = 0;
-  let accAttr = {};
 
   getAttributes();
 
@@ -806,16 +684,6 @@ async function check() {
   setAllAttr();
 
   await getConditions();
-
-
-  applyCondAttToAllRows();
-
-  // check if there is a cycle
-  let cycle = findCycle(data.map(row => {conditions: row.conditions.filter(condition => condition.min_d !== undefined && condition.min_d > -1)}));
-  if(cycle !== null) {
-    inconsist(cycle[0], 0, `Cycle detected: ${cycle.map(index => `${values[index][nameInd][0]} (${index})`).join(" -> ")}.`, []);
-    return -1;
-  }
 }
 
 
@@ -1971,27 +1839,31 @@ function findSubformulas(node) {
   }
 }
 
+function getTrimmedResult(str) {
+  return str.split(/(\s*&&\s*|\s*\|\|\s*|\s*!\s*|\s*\(\s*|\s*\)\s*)/).filter(Boolean);
+}
+
 function replaceWithSameWord(str) {
   const replacements = {}; // Object to store replacements
   const reverseReplacements = {}; // Object to store reverse mapping
   let wordCounter = 0; // Counter to generate new words
 
-  const trimmedResult  = str.split(/(\s*&&\s*|\s*\|\|\s*|\s*!\s*|\s*\(\s*|\s*\)\s*)/).filter(Boolean);
+  const trimmedResult  = getTrimmedResult(str);
   const operators = new Set(["&&", "||", "!", "(", ")"]);
   
-  const nameRow = "[^\[\]&&||!]+?";
-  let regex = /(?<after>a\s*(?!_\s*[^\d\s-]*$)(?<min_d>-?\d+)?\s*_?\s*(?<max_d>-?\d+)?\s*(?:\s*"\s*(?<attrib_ref>nameRow)\s*"\s*(?:\[\s*"\s*(?<attrib_ref_col>nameRow)\s*"\s*\])?)?\s*"\s*(?<precedent>nameRow)\s*"\s*(?:\[\s*"\s*(?<precedent_col>[^\[\]]+)\s*"\s*\])?(?<isAny>\(any\))?)|(?:p(?<position>-?\d+))/g;
-  regex = regex.replace(/nameRow/g, nameRow);
-  const replacedWithWords = trimmedResult.forEach(item => {
+  const nameRow = "[^\\[\\]&|!]+?";
+  let pattern = `^(?<after>a\\s*(?!_\\s*[^\\d\\s-]*$)(?<min_d>-?\\d+)?\\s*_?\\s*(?<max_d>-?\\d+)?\\s*(?:\\s*"\\s*(?<attrib_ref>${nameRow})\\s*"\\s*(?:\\[\\s*"\\s*(?<attrib_ref_col>${nameRow})\\s*"\\s*\\])?)?\\s*"\\s*(?<precedent>${nameRow})\\s*"\\s*(?:\\[\\s*"\\s*(?<precedent_col>[^\\[\\]]+)\\s*"\\s*\\])?(?<isAny>\\(any\\))?)|(?:p(?<position>-?\\d+))$`;
+  let regex = new RegExp(pattern);
+  let replacedWithWords = trimmedResult.map(item => {
     if (!operators.has(item)) {
       const match = str.match(regex);
       if(!match) {
-        return Error("incorrect condition.");
+        throw Error("incorrect condition.");
       }
       const groups = match.groups; // The last element in args array is the groups object
 
       if (!replacements[match[0]]) {
-        const newWord = `word${wordCounter++} `;
+        const newWord = `word${wordCounter++}`;
         replacements[match[0]] = newWord;
 
         // Store the reverse mapping along with the capturing groups
@@ -2000,82 +1872,26 @@ function replaceWithSameWord(str) {
           groups.max_d = groups.max_d;
         }
         reverseReplacements[newWord] = [{}];
+
         
-        // Loop through each key in the groups object and add it to reverseReplacements[newWord].groups
-        for (let key in groups) {
-            if (groups.hasOwnProperty(key)) {
-                reverseReplacements[newWord][0][key] = groups[key];
-            }
-        }
+        reverseReplacements[newWord][0] = {
+          ...groups
+        };
+        
+        // // Loop through each key in the groups object and add it to reverseReplacements[newWord].groups
+        // for (let key in groups) {
+        //     if (groups.hasOwnProperty(key)) {
+        //         reverseReplacements[newWord][0][key] = groups[key];
+        //     }
+        // }
       }
       return replacements[match[0]] + " ";
     } else {
       return item;
     }
-  });
+  }).join('');
 
   return { replacedWithWords, reverseReplacements };
-}
-
-function findCycle(elements) {
-  // Create an array to track the visitation state of each element:
-  // 0 = unvisited, 1 = visiting, 2 = visited
-  const visited = new Array(elements.length).fill(0);
-  const stack = []; // To keep track of the current path
-
-  // Helper function to perform DFS
-  function dfs(index) {
-      // If the element is already being visited, we've found a cycle
-      if (visited[index] === 1) {
-          const cycleStartIndex = stack.indexOf(index);
-          if (cycleStartIndex !== -1) {
-              // Return the cycle in order
-              return stack.slice(cycleStartIndex).concat(index);
-          }
-      }
-
-      // If the element has been fully visited, no cycle was found here
-      if (visited[index] === 2) return null;
-
-      // Mark the element as visiting and add to the stack
-      visited[index] = 1;
-      stack.push(index);
-
-      // Iterate over all the afterIndex entries
-      let afterIndexes = [];
-      if(elements[index] !== undefined) {
-        afterIndexes = elements[index].conditions;
-      }
-
-      for (let i = 0; i < afterIndexes.length; i++) {
-          const nextIndex = afterIndexes[i].ulterior;
-
-          // Perform DFS on each index
-          if (nextIndex !== null && nextIndex !== undefined) {
-              const cycle = dfs(nextIndex);
-              if (cycle) return cycle;
-          }
-      }
-
-      // Mark the element as fully visited and remove from stack
-      visited[index] = 2;
-      stack.pop();
-
-      // No cycle was found
-      return null;
-  }
-
-  // Run DFS for each element
-  for (let i = 0; i < elements.length; i++) {
-      if (visited[i] === 0 && elements[i].conditions.length === 0) {
-          const cycle = dfs(i);
-          if (cycle) {
-              return cycle; // Return the cycle with element ids
-          }
-      }
-  }
-
-  return null; // No cycles found
 }
 
 app.get('/health', (req, res) => {
@@ -2202,43 +2018,93 @@ function extractLinkedTerms(formula) {
 const { PythonShell } = require('python-shell');
 
 
-function exprToList(expr) {
+function parseLogicalFormula(formula) {
+  // Remove spaces
+  formula = formula.replace(/\s+/g, '');
+
   function parseExpression(expression) {
-      // Remove any spaces from the expression
-      expression = expression.replace(/\s+/g, '');
+      let stack = [];
+      let currentOp = null;
+      
+      let i = 0;
 
-      // Replace logical operators with symbols that are easier to work with
-      expression = expression.replace(/&&/g, '&').replace(/\|\|/g, '|').replace(/!/g, '~');
+      while (i < expression.length) {
+          const char = expression[i];
 
-      // Function to process the expression recursively
-      function process(expr) {
-          if (expr.startsWith('~')) { // Handle NOT (~) operator
-              return [0, 2, process(expr.substring(1))];
-          } else if (expr.startsWith('(') && expr.endsWith(')')) {
-              expr = expr.substring(1, expr.length - 1);
-          }
-
-          // Find the main operator, respecting parentheses
-          let depth = 0;
-          for (let i = 0; i < expr.length; i++) {
-              if (expr[i] === '(') depth++;
-              if (expr[i] === ')') depth--;
-              if (depth === 0) {
-                  if (expr[i] === '&') { // AND operator
-                      return [-1, process(expr.substring(0, i)), process(expr.substring(i + 1))];
-                  } else if (expr[i] === '|') { // OR operator
-                      return [0, process(expr.substring(0, i)), process(expr.substring(i + 1))];
-                  }
+          if (char === '(') {
+              // Find the matching closing parenthesis
+              let openBrackets = 1;
+              let startIndex = i + 1;
+              i++;
+              while (openBrackets > 0 && i < expression.length) {
+                  if (expression[i] === '(') openBrackets++;
+                  if (expression[i] === ')') openBrackets--;
+                  i++;
               }
+              const subExpr = expression.slice(startIndex, i - 1);
+              const parsedSubExpr = parseExpression(subExpr);
+              if (currentOp) {
+                  currentOp.push(parsedSubExpr);
+              } else {
+                  stack.push(parsedSubExpr);
+              }
+          } else if (char === '!') {
+              // Handle NOT operator
+              i++;
+              if (expression[i] === '(') {
+                  let openBrackets = 1;
+                  let startIndex = i + 1;
+                  i++;
+                  while (openBrackets > 0 && i < expression.length) {
+                      if (expression[i] === '(') openBrackets++;
+                      if (expression[i] === ')') openBrackets--;
+                      i++;
+                  }
+                  const subExpr = expression.slice(startIndex, i - 1);
+                  stack.push([0, '!', parseExpression(subExpr)]);
+              } else {
+                  let operand = '';
+                  while (i < expression.length && /[a-zA-Z]/.test(expression[i])) {
+                      operand += expression[i];
+                      i++;
+                  }
+                  stack.push([0, '!', operand]);
+              }
+          } else if (char === '|' && expression[i + 1] === '|') {
+              // Handle OR operator
+              i += 2;
+              const left = currentOp || stack.pop();
+              currentOp = [0, left];
+              stack.push(currentOp);
+          } else if (char === '&' && expression[i + 1] === '&') {
+              // Handle AND operator
+              i += 2;
+              const left = currentOp || stack.pop();
+              currentOp = [-1, left];
+              stack.push(currentOp);
+          } else if (/[a-zA-Z]/.test(char)) {
+              // Handle variables (a, b, c, ...)
+              let variable = '';
+              while (i < expression.length && /[a-zA-Z]/.test(expression[i])) {
+                  variable += expression[i];
+                  i++;
+              }
+              if (currentOp) {
+                  currentOp.push(variable);
+                  currentOp = null;
+              } else {
+                  stack.push(variable);
+              }
+          } else {
+              i++;
           }
-
-          return expr; // Base case: return the literal expression
       }
 
-      return process(expression);
+      // Reduce the stack based on operator precedence
+      return stack.length === 1 ? stack[0] : stack;
   }
 
-  return parseExpression(expr);
+  return parseExpression(formula);
 }
 
 const math = require('mathjs');
@@ -2289,7 +2155,7 @@ function findFalseTerms(expressionStr) {
 
 
 // Function to call Python script and return a promise
-function runPythonScript(pythonFile, arg1) {
+function runPythonScript0(pythonFile, arg1) {
   return new Promise((resolve, reject) => {
     const options = {
       mode: 'json',
@@ -2301,6 +2167,28 @@ function runPythonScript(pythonFile, arg1) {
 
     // Send data to the Python script
     pyshell.send({ arg1 });
+
+    // Receive output from the Python script
+    pyshell.on('message', (message) => {
+      resolve(message); // Resolve the promise with the message (result) from Python
+    });
+
+    pyshell.end((err) => {
+      if (err) reject(err); // Reject the promise if there's an error
+    });
+  });
+}
+
+function runPythonScript(pythonFile, arg1) {
+  return new Promise((resolve, reject) => {
+    const options = {
+      mode: 'json',
+      pythonOptions: ['-u'], // Unbuffered stdout
+      scriptPath: './', // Directory where the script is located
+      args: [arg1], // Passing argument directly to the Python script
+    };
+
+    const pyshell = new PythonShell("C:\\Users\\abarb\\Documents\\health\\news_underground\\mediaSorter\\programs\\excel_prog\\mediaSorter\\" + pythonFile + ".py", options);
 
     // Receive output from the Python script
     pyshell.on('message', (message) => {
@@ -2333,11 +2221,10 @@ function checkGraph(graph, threshold) {
     while (stack.length > 0) {
       const { node: currentNode, dist: currentDist, path: currentPath } = stack[stack.length - 1]; // Peek the top of the stack
 
-      if (!visited[currentNode]) {
-          visited[currentNode] = true;
-          inStack[currentNode] = true;
-          distances[currentNode] = currentDist;
-      }
+      visited[currentNode] = true;
+      inStack[currentNode] = true;
+      distances[currentNode] = currentDist;
+      data[currentNode].minDist = Math.max(data[currentNode].minDist, currentDist);
 
       // If the current distance exceeds the threshold, return the path up to that point
       if (currentDist > threshold) {
@@ -2347,7 +2234,7 @@ function checkGraph(graph, threshold) {
       let hasUnvisitedNeighbor = false;
 
       // Explore all neighbors
-      for (const [neighbor, weight] of graph[currentNode]) {
+      for (const [neighbor, weight, max_d] of graph[currentNode].posteriors) {
         if (inStack[neighbor]) {
           // If a neighbor is already in the stack, we've found a cycle
           const cyclePath = [...currentPath, neighbor];
@@ -2374,18 +2261,88 @@ function checkGraph(graph, threshold) {
   return null;
 }
 
-app.post('/test', async (req, res) => {
-  // Example graph as an array of adjacency lists with distances
-  // Each element points to other nodes with distances: graph[i] = [[neighbor, distance], ...]
-  const graph = [
-    [[1, 3], [2, 5]], // Node 0 points to node 1 (distance 3) and node 2 (distance 5)
-    [[2, 2], [3, 4]], // Node 1 points to node 2 (distance 2) and node 3 (distance 4)
-    [[3, 5]],         // Node 2 points to node 3 (distance 1)
-    [[0, 1]]          // Node 3 points back to node 0 (distance 6) forming a cycle
-  ];
 
-  const threshold = 11;
-  console.log(checkGraph(graph, threshold)); // Output: { result: 'Cycle detected' }
+function transformTerms(expression, transformFunc, reverseReplacements) {
+  // If it's a string (a variable), apply the transformation function
+  if (typeof expression === 'string') {
+      return transformFunc(reverseReplacements, expression);
+  }
+
+  // If it's an array, it represents an operator and its operands
+  const operator = expression[0];
+  const operands = expression.slice(expression[1]==='!'?2:1);
+
+  // Recursively apply the transform function to each operand
+  const transformedOperands = operands.map(operand => transformTerms(operand, transformFunc, reverseReplacements));
+
+  // Return the transformed operation (operator + transformed operands)
+  return [operator, ...transformedOperands];
+}
+
+function exampleTransform(reverseReplacements, term) {
+  return reverseReplacements[term][0];
+}
+
+function transformLogicalFormula(tokens) {
+  let i = 0;
+
+  function parseAnd() {
+    let operands = [];
+    while (tokens[i] !== '||' && tokens[i] !== ')' && i < tokens.length) {
+      if (tokens[i] === '(') {
+        i++;
+        operands.push(parseExpression());
+      } else if (tokens[i] !== '&&') {
+        operands.push(tokens[i]);
+        i++;
+      } else {
+        i++;  // skip '&&'
+      }
+    }
+    return operands.length > 1 ? [-operands.length, ...operands] : operands[0];
+  }
+
+  function parseOr() {
+    let operands = [parseAnd()];
+    while (i < tokens.length && tokens[i] === '||') {
+      i++;  // skip '||'
+      operands.push(parseAnd());
+    }
+    return operands.length > 1 ? [0, ...operands] : operands[0];
+  }
+
+  function parseExpression() {
+    let result = [];
+
+    while (i < tokens.length) {
+      const token = tokens[i];
+
+      if (token === '(') {
+        i++;  // skip '('
+        result.push(parseOr());
+      } else if (token === ')') {
+        i++;  // skip ')'
+        break;
+      } else if (token === '!') {
+        i++;
+        result.push([0, '!', parseExpression()]);
+      } else {
+        result.push(token);
+        i++;
+      }
+    }
+
+    return result.length === 1 ? result[0] : result;
+  }
+
+  return parseExpression();
+}
+
+
+app.post('/test', async (req, res) => {
+  // Example usage:
+  let formula = ["!", "(", "a", "&&", "b", "&&", "c", "||", "d", "||", "e", ")"];
+  console.log(JSON.stringify(transformLogicalFormula(formula), null, 2));
 
   res.json("finished");
 });

@@ -15,8 +15,8 @@ def expr_to_list(expr):
     else:
         return str(expr)
 
-def main(expression):
-    expression = expression.replace("&&", "&").replace("||", "|").replace("!", "~")
+def main(args):
+    expression = args[0].replace("&&", "&").replace("||", "|").replace("!", "~")
 
     # Convert the string into a SymPy expression
     sympy_expr = sympify(expression)
@@ -28,25 +28,9 @@ def main(expression):
     # result = expr_to_list(simplified_expr)
 
     # Output the simplified expression
-    return str(simplified_expr)
-
-
-
-    # # simplified_expr = simplify_logic(expression)
-
-    # result = expr_to_list(simplified_expr)
-    # print(result)
+    print(json.dumps(str(simplified_expr)))
 
 if __name__ == "__main__":
-    # import sys
-    # main(sys.argv[1:])
-
-
-    # Assume arguments are passed as JSON via stdin
-    input_json = sys.stdin.read()
-    args = json.loads(input_json)
-    
-    result = main(args['arg1'])
-    
-    # Output result as JSON
-    print(json.dumps({"result": result}))
+    import json
+    import sys
+    main(sys.argv[1:])
