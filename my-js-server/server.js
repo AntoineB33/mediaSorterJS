@@ -176,7 +176,7 @@ function handleSelectLinks() {
 
 async function handleChange(updates) {
   nbLineBef = values.length;
-  if(nbLineBef) {
+  if(nbLineBef > 0) {
     colNumb = values[0].length;
   } else {
     colNumb = 0;
@@ -382,7 +382,11 @@ function getAttributes() {
   for (let j = 0; j < colNumb; j++) {
     let colTitle = values0[sheetCodeName][0][j];
     if(colTitle !== null){
-      colTitle = colTitle.split(";");
+      try{
+        colTitle = colTitle.split(";");
+      } catch (error) {
+        return;
+      }
     } else {
       colTitle = [];
     }
@@ -530,7 +534,7 @@ async function getConditions() {
     }
     
     let direct_terms = [];
-    if(replacedWithWords!==undefined) {
+    if(replacedWithWords!=='') {
       try {
 
         direct_terms = await runPythonScript("test_direct", replacedWithWords)
@@ -663,7 +667,7 @@ async function getConditions() {
     let replacedWithWords = data[i].replacedWithWords;
     let simplified = [];
     let output = [];
-    if(replacedWithWords !== undefined) {
+    if(replacedWithWords !== '') {
       try {
         // Await the result from the Python script
         simplified = await runPythonScript("simplify_expression", replacedWithWords);
