@@ -195,7 +195,7 @@ async function handleChange(updates) {
         values0[sheetCodeName].push([]);
       }
       for (let i = 0; i < values.length; i++) {
-        while (values[i].length <= colNumb) {
+        while (values[i].length < colNumb) {
           values[i].push([]);
           values0[sheetCodeName][i].push(null);
         }
@@ -219,22 +219,26 @@ async function handleChange(updates) {
       }
       values.splice(nbLineBef, nbLineBefBef - nbLineBef);
       values0[sheetCodeName].splice(nbLineBef, nbLineBefBef - nbLineBef);
-      let colNumbMax = 0;
-      for(let i = 0; i < nbLineBef; i++) {
-        let colNumbRow = colNumb;
+      if(column === colNumb - 1) {
+        let newColNumb = colNumb;
+        let stop = false;
         for(let j = colNumb - 1; j > -1; j--) {
-          if(values[i][j].length == 0) {
-            colNumbRow--;
-          } else {
+          for(let i = 0; i < nbLineBef; i++) {
+            if(values[i][j].length !== 0) {
+              stop = true;
+              break;
+            }
+          }
+          if(stop) {
             break;
           }
+          newColNumb--;
         }
-        colNumbMax = Math.max(colNumbMax, colNumbRow);
-      }
-      if(colNumbMax != colNumb) {
-        for(let i = 0; i < nbLineBef; i++) {
-          values[i].splice(colNumbMax, colNumb - colNumbMax);
-          values0[sheetCodeName][i].splice(colNumbMax, colNumb - colNumbMax);
+        if(newColNumb != colNumb) {
+          for(let i = 0; i < nbLineBef; i++) {
+            values[i].splice(newColNumb, colNumb - newColNumb);
+            values0[sheetCodeName][i].splice(newColNumb, colNumb - newColNumb);
+          }
         }
       }
     }
@@ -2043,10 +2047,10 @@ function checkGraph(graph, threshold) {
 
       // If the current distance exceeds the threshold, return the path up to that point
       if (currentMinDist > threshold) {
-        return { result: `Distance exceeds threshold : ${currentPath.join(' -> ')}`, row: currentNode};
+        return { result: `Distance exceeds threshold : ${currentPath.map(e => e + 1).join(' -> ')}`, row: currentNode};
       }
       if (data[currentNode].position !== undefined && (data[currentNode].position < currentMinDist || data[currentNode].position > currentMaxDist)) {
-        return { result: `Position out of range : ${currentPath.join(' -> ')}`, row: currentNode};
+        return { result: `Position out of range : ${currentPath.map(e => e + 1).join(' -> ')}`, row: currentNode};
       }
 
       let hasUnvisitedNeighbor = false;
@@ -2057,7 +2061,7 @@ function checkGraph(graph, threshold) {
           // If a neighbor is already in the stack, we've found a cycle
           let cyclePath = [...currentPath, neighbor];
           const index = cyclePath.indexOf(neighbor);
-          cyclePath = cyclePath.slice(index);
+          cyclePath = cyclePath.slice(index).map(e => e + 1);
           return { result: `Cycle detected : ${cyclePath.join(' -> ')}`, row: currentNode};
         }
         if (!visited[neighbor] || data[neighbor].minDist < currentMinDist + min_d) {
