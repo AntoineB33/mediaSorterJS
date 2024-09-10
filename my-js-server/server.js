@@ -671,10 +671,12 @@ async function getConditions() {
     data[i].nbPost = data[i].posteriors.length;
     for (let j = 0; j < data[i].nbPost; j++) {
       data[data[i].posteriors[j]].ulteriors.push(newInd[i]);
+      data[data[i].posteriors[j]].ulteriors_size++;
     }
     data[i].posteriors = undefined;
+    data[i].minDist = undefined;
     data[i].maxDist = undefined;
-    data[i].minDist = allMediaRows.length - data[i].minDist;
+    data[i].highest = allMediaRows.length - data[i].minDist;
     
     // simplify the formulas
     let reverseReplacements = data[i].reverseReplacements;
