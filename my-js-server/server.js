@@ -55,7 +55,6 @@ var response;
 
 // Convert exec into a promise-based function for async/await
 const execPromise = util.promisify(exec);
-
 // Define the path to the C executable
 const exePath = path.join('C:', 'Users', 'abarb', 'source', 'repos', 'mediaSorter', 'x64', 'Debug', 'mediaSorter.exe');
 
@@ -87,11 +86,15 @@ class Node {
 }
 
 
-// Function to call the C program with a list of numbers
-async function callCProgram(numbers) {
-  const args = numbers.join(' '); // Convert list of numbers to argument string
-  const { stdout } = await execPromise(`"${exePath}" ${args}`);
-  return stdout.trim().split(' ').map(Number); // Parse the result into an array of numbers
+async function callCProgram(obj) {
+  // Convert the object to a JSON string
+  const jsonString = JSON.stringify(obj);
+  
+  // Pass the JSON string as an argument to the C program
+  const { stdout } = await execPromise(`"${exePath}" '${jsonString}'`);
+  
+  // Parse the result back from C (assuming C returns a JSON string)
+  return JSON.parse(stdout.trim());
 }
 
 /**
@@ -364,7 +367,7 @@ function checkBrack(i, j, k, val, columnTitle) {
 
 function initializeData() {
   for (let i = 1; i < nbLineBef; i++) {
-    data.push({attributes: new Set(), posteriors: [], ulteriors: 0, minDist: 0, maxDist: Infinity});
+    data.push({attributes: new Set(), posteriors: [], ulteriors: [], nbPost: 0, minDist: 0, maxDist: Infinity});
     // check if a non-empty row has no name
     if(!values[i][nameInd].length) {
       for (let j = 0; j < values[i].length; j++) {
@@ -632,10 +635,8 @@ async function getConditions() {
             }
             replacedWithWords = replacedWithWords.replace(direct_terms[j] + " ", " true ");
             data[groups.precedent].posteriors.push([i, groups.min_d, groups.max_d]);
-            data[i].ulteriors++;
           } else if(groups.min_d !== undefined && groups.min_d > -1) {
             data[i].posteriors.push([groups.precedent, groups.min_d, groups.max_d]);
-            data[groups.precedent].ulteriors++;
           }
         } else if(groups.position !== undefined) {
           if(data[i].position !== undefined && data[i].position !== groups.position) {
@@ -664,9 +665,18 @@ async function getConditions() {
       a++;
     }
   }
-  // simplify the formulas
   for (let i0 = 0; i0 < allMediaRows.length; i0++) {
+    // deduce ulteriors from posteriors
     let i = allMediaRows[i0];
+    data[i].nbPost = data[i].posteriors.length;
+    for (let j = 0; j < data[i].nbPost; j++) {
+      data[data[i].posteriors[j]].ulteriors.push(newInd[i]);
+    }
+    data[i].posteriors = undefined;
+    data[i].maxDist = undefined;
+    data[i].minDist = allMediaRows.length - data[i].minDist;
+    
+    // simplify the formulas
     let reverseReplacements = data[i].reverseReplacements;
     let replacedWithWords = data[i].replacedWithWords;
     let simplified = [];
@@ -686,17 +696,19 @@ async function getConditions() {
     data[i].conditions = output;
   }
 
-  const iterations = 3;  // Example: Call C program 3 times
-  const allResults = [];
+  // let result = await callCProgram(data.filter(e => !e.isAtt));
 
-  // Loop to call the C program multiple times
-  for (let i = 0; i < iterations; i++) {
-      const numbers = [i + 1, (i + 1) * 2, (i + 1) * 3]; // Example input for each iteration
-      console.log(`Calling C program with input: ${numbers}`);
-      const result = await callCProgram(numbers);
-      allResults.push(result);  // Collect results from each call
-  }
-  console.log(allResults);
+
+  // Example JSON object following the format required by the C program
+  const exampleInput = {
+    nodes: [
+      { after: [1, 2], before_count: 0 },
+      { after: [3], before_count: 1 },
+      { after: [], before_count: 1 },
+      { after: [], before_count: 1 }
+    ]
+  };
+  let result = await callCProgram(exampleInput);
 }
 
 async function check() {
