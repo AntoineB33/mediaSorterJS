@@ -636,7 +636,7 @@ async function getConditions() {
             replacedWithWords = replacedWithWords.replace(direct_terms[j] + " ", " true ");
             data[groups.precedent].posteriors.push([i, groups.min_d, groups.max_d]);
           } else if(groups.min_d !== undefined && groups.min_d > -1) {
-            data[i].posteriors.push([groups.precedent, groups.min_d, groups.max_d]);
+            data[i].posteriors.push({precedent: groups.precedent, min_d: groups.min_d, max_d: groups.max_d});
           }
         } else if(groups.position !== undefined) {
           if(data[i].position !== undefined && data[i].position !== groups.position) {
@@ -668,15 +668,20 @@ async function getConditions() {
   for (let i0 = 0; i0 < allMediaRows.length; i0++) {
     // deduce ulteriors from posteriors
     let i = allMediaRows[i0];
-    data[i].nbPost = data[i].posteriors.length;
-    for (let j = 0; j < data[i].nbPost; j++) {
-      data[data[i].posteriors[j]].ulteriors.push(newInd[i]);
-      data[data[i].posteriors[j]].ulteriors_size++;
+    data[i].nbPost = 0;
+    for (let j = 0; j < data[i].posteriors.length; j++) {
+      if(data[i].posteriors.min_d > 0) {
+        data[data[i].posteriors[j]].ulteriors.push(newInd[i]);
+        data[data[i].posteriors[j]].ulteriors_size++;
+        data[i].nbPost++;
+      }
     }
+    data[i].highest = allMediaRows.length - data[i].minDist;
+    data[i].lowest = data[i].minDist;
     data[i].posteriors = undefined;
     data[i].minDist = undefined;
     data[i].maxDist = undefined;
-    data[i].highest = allMediaRows.length - data[i].minDist;
+
     
     // simplify the formulas
     let reverseReplacements = data[i].reverseReplacements;
@@ -1897,7 +1902,7 @@ function replaceWithSameWord(str) {
   const operators = new Set(["&&", "||", "!", "(", ")"]);
   
   const nameRow = "[^\\[\\]&|!]+?";
-  let pattern = `^(?:a\\s*(?!_\\s*[^\\d\\s-]*$)(?<min_d>-?\\d+)?\\s*_?\\s*(?<max_d>-?\\d+)?\\s*(?:\\s*"\\s*(?<attrib_ref>${nameRow})\\s*"\\s*(?:\\[\\s*"\\s*(?<attrib_ref_col>${nameRow})\\s*"\\s*\\])?)?\\s*"\\s*(?<precedent>${nameRow})\\s*"\\s*(?:\\[\\s*"\\s*(?<precedent_col>[^\\[\\]]+)\\s*"\\s*\\])?(?<isAny>\\(any\\))?)|(?:p(?<position>-?\\d+))$`;
+  let pattern = `^\s*(?:a\s*(?!_\s*[^\d\s:]*$)(?<min_d>:?\d+)?\s*_?\s*(?<max_d>-?\d+)?\s*(?:\s*"\s*(?<attrib_ref>${nameRow})\s*"\s*(?:\[\s*"\s*(?<attrib_ref_col>${nameRow})\s*"\s*\])?)?\s*"\s*(?<precedent>${nameRow})\s*"\s*(?:\[\s*"\s*(?<precedent_col>[^\[\]]+)\s*"\s*\])?(?<isAny>\(any\))?)|(?<position>p(?!_\s*[^\d\s:]*$)\s*(?<min_d>:?\d+)?\s*_?\s*(?<max_d>-?\d+)?)\s*$`;
   let regex = new RegExp(pattern);
   let replacedWithWords = trimmedResult.map(item => {
     if (!operators.has(item)) {
@@ -1913,17 +1918,23 @@ function replaceWithSameWord(str) {
 
         // Store the reverse mapping along with the capturing groups
         if(groups.max_d === undefined && groups.min_d === undefined) {
+          if(groups.position !== undefined) {
+            throw Error("incorrect condition : p must be followed by a number.");
+          }
           groups.min_d = 1;
-        } else if (groups.min_d === 0) {
-          groups.min_d = 1;
-        } else if (groups.max_d === 0) {
-          groups.max_d = -1;
         } else if (groups.max_d !== undefined && groups.min_d !== undefined) {
           if (groups.max_d < groups.min_d) {
             throw Error("incorrect condition : the maximum distance is lesser than the minimum distance.");
           }
           if (groups.max_d === groups.min_d && groups.max_d === 0) {
             throw Error("incorrect condition : the maximum distance and the minimum distance are 0.");
+          }
+        }
+        if (groups.position === undefined) {
+          if (groups.min_d === 0) {
+            groups.min_d = 1;
+          } else if (groups.max_d === 0) {
+            groups.max_d = -1;
           }
         }
         reverseReplacements[newWord] = [{}];
