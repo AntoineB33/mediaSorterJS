@@ -13,6 +13,10 @@
 
 
 
+Private Sub WatchButton_Click()
+    ThisWorkbook.CallJavaScriptFunctionAsync "show", False
+End Sub
+
 Private Sub SortButton_Click()
     sheetVBA.Protect UserInterfaceOnly:=sorting(sheetCodeName)
     If sorting(sheetCodeName) Then

@@ -108,6 +108,7 @@ Private Sub Workbook_Open()
 
 
 
+    UserForm1.WatchButton.Caption = "Watch"
     UserForm1.SortButton.Caption = "Sort"
     UserForm1.updateButton.Caption = "update"
     UserForm1.ctrlZButton.Caption = "ctrlZ"
@@ -202,6 +203,7 @@ Public Sub CheckHttpResponse()
                             Dim labelHandler As clsLabelHandler
                             Set listBoxList(sheetCodeName) = New Collection
                             Dim subItem As Variant
+                            ' subItem for each 
                             For Each subItem In item(key)
                                 Dim callAddress As range
                                 Dim oneListItem As Variant
@@ -578,39 +580,21 @@ Public Sub CallJavaScriptFunctionAsync(ByVal funcName As String, ParamArray para
     Set requestItem.http = http
     requestItem.funcName = funcName
     requestItem.sheetCodeName = sheetCodeName
-    
-    ' Convert ParamArray to regular array
-    If UBound(params) > -1 Then
-        Dim paramsArray() As Variant
-        ReDim paramsArray(LBound(params) To UBound(params) - 1)
-        For i = LBound(params) + 1 To UBound(params)
-            paramsArray(i - 1) = params(i)
-        Next i
-    End If
         
-    
-    
-
     ' Generate the timestamp
     Dim timestamp As String
     timestamp = funcName & " " & GetPreciseLocalTimestamp
     
     ' Create JSON request body
+    Dim json As Object
+    Set json = CreateObject("Scripting.Dictionary")
+    json.Add "functionName", funcName
+    json.Add "timestamp", timestamp
+    For i = LBound(params) + 1 To UBound(params) Step 2
+        json.Add params(i), params(i + 1)
+    Next i
     Dim jsonRequest As String
-    If UBound(params) > 0 Then
-        Dim json As Object
-        Set json = CreateObject("Scripting.Dictionary")
-
-        json.Add "timestamp", timestamp
-
-        json.Add "functionName", funcName
-        For i = LBound(paramsArray) To UBound(paramsArray) Step 2
-            json.Add paramsArray(i), paramsArray(i + 1)
-        Next i
-        jsonRequest = JsonConverter.ConvertToJson(json)
-    Else
-        jsonRequest = "{""functionName"": """ & funcName & """}"
-    End If
+    jsonRequest = JsonConverter.ConvertToJson(json)
     
     If params(LBound(params)) Then
         requests.Add requestItem

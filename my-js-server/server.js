@@ -471,8 +471,7 @@ function getNames() {
 }
 
 function setAllAttr() {
-  for (let i0 = 0; i0 < allMediaRows.length; i0++) {
-    let i = allMediaRows[i0];
+  for(const i of allMediaRows) {
     let visited = new Set();
     for(let j of data[i].attributes) {
       const queue = [j]; // Initialize the queue with the start index
@@ -523,8 +522,7 @@ function addFormula(i, formula) {
 
 async function getConditions() {
   let optConds = false;
-  for (let i0 = 0; i0 < allMediaRows.length; i0++) {
-    let i = allMediaRows[i0];
+  for(const i of allMediaRows) {
     let formula = [];
     addFormula(i, formula);
     for (let a of data[i].attributes) {
@@ -557,6 +555,7 @@ async function getConditions() {
       }
     }
     
+    // push in reverseReplacements groups for all the rows that have the aimed attributes
     for(let word in reverseReplacements) {
       if (reverseReplacements.hasOwnProperty(word)) {
         let groups = reverseReplacements[word][0];
@@ -634,7 +633,7 @@ async function getConditions() {
               groups.max_d = -groups.min_d;
             }
             replacedWithWords = replacedWithWords.replace(direct_terms[j] + " ", " true ");
-            data[groups.precedent].posteriors.push([i, groups.min_d, groups.max_d]);
+            data[groups.precedent].posteriors.push({precedent: i, min_d: groups.min_d, max_d: groups.max_d});
           } else if(groups.min_d !== undefined && groups.min_d > -1) {
             data[i].posteriors.push({precedent: groups.precedent, min_d: groups.min_d, max_d: groups.max_d});
           }
@@ -665,19 +664,17 @@ async function getConditions() {
       a++;
     }
   }
-  for (let i0 = 0; i0 < allMediaRows.length; i0++) {
-    // deduce ulteriors from posteriors
-    let i = allMediaRows[i0];
+  var lowests = [];
+  for(const i of allMediaRows) {
     data[i].nbPost = 0;
     for (let j = 0; j < data[i].posteriors.length; j++) {
-      if(data[i].posteriors.min_d > 0) {
-        data[data[i].posteriors[j]].ulteriors.push(newInd[i]);
-        data[data[i].posteriors[j]].ulteriors_size++;
+      if(data[i].posteriors[j].min_d > 0) {
+        data[data[i].posteriors[j].precedent].ulteriors.push(newInds[i]);
         data[i].nbPost++;
       }
     }
     data[i].highest = allMediaRows.length - data[i].minDist;
-    data[i].lowest = data[i].minDist;
+    lowests.push(data[i].minDist);
     data[i].posteriors = undefined;
     data[i].minDist = undefined;
     data[i].maxDist = undefined;
@@ -687,7 +684,7 @@ async function getConditions() {
     let reverseReplacements = data[i].reverseReplacements;
     let replacedWithWords = data[i].replacedWithWords;
     let simplified = [];
-    let output = [];
+    data[i].conditions = [];
     if(replacedWithWords !== '') {
       try {
         // Await the result from the Python script
@@ -698,9 +695,10 @@ async function getConditions() {
       }
 
       let formulaList = transformLogicalFormula(getTrimmedResult(simplified));
-      transformTerms(formulaList, exampleTransform, reverseReplacements, newInds);
+
+      // change the 
+      data[i].conditions = transformTerms(formulaList, exampleTransform, reverseReplacements, newInds);
     }
-    data[i].conditions = output;
   }
 
   // let result = await callCProgram(data.filter(e => !e.isAtt));
@@ -715,7 +713,7 @@ async function getConditions() {
       { after: [], before_count: 1 }
     ]
   };
-  let result = await callCProgram(exampleInput);
+  // let result = await callCProgram(exampleInput);
 }
 
 async function check() {
@@ -1834,61 +1832,6 @@ async function ctrlY() {
   }
 }
 
-function addLineToFile(filePath, line) {
-  // Add a newline character at the end of the line
-  const lineWithNewline = line + '\n';
-  
-  // Append the line to the file asynchronously
-  fs.appendFile(filePath, lineWithNewline, (err) => {
-      if (err) {
-          console.error('Error writing to file:', err);
-      } else {
-          console.log('Line added to file successfully.');
-      }
-  });
-}
-
-function findNecessarySubformulas0(node) {
-    if (node.value === '&&') {
-        const left = findNecessarySubformulas(node.left);
-        const right = findNecessarySubformulas(node.right);
-        return left.concat(right);
-    } else if (node.value === '||') {
-        const left = findNecessarySubformulas(node.left);
-        const right = findNecessarySubformulas(node.right);
-        const common = left.filter(value => right.includes(value));
-        return common;
-    } else {
-        return [node.value];
-    }
-}
-
-function findSubformulas(node) {
-  if (node.value === '&&') {
-      const left = findSubformulas(node.left);
-      const right = findSubformulas(node.right);
-      return {
-          necessary: left.necessary.concat(right.necessary),
-          rest: left.rest.concat(right.rest)
-      };
-  } else if (node.value === '||') {
-      const left = findSubformulas(node.left);
-      const right = findSubformulas(node.right);
-      const common = left.necessary.filter(value => right.necessary.includes(value));
-      const restLeft = left.necessary.filter(value => !common.includes(value)).concat(left.rest);
-      const restRight = right.necessary.filter(value => !common.includes(value)).concat(right.rest);
-      return {
-          necessary: common,
-          rest: [node].concat(restLeft).concat(restRight)
-      };
-  } else {
-      return {
-          necessary: [node.value],
-          rest: []
-      };
-  }
-}
-
 function getTrimmedResult(str) {
   return str.split(/(\s*&&\s*|\s*\|\|\s*|\s*!\s*|\s*\(\s*|\s*\)\s*)/).filter(Boolean);
 }
@@ -1901,9 +1844,15 @@ function replaceWithSameWord(str) {
   const trimmedResult  = getTrimmedResult(str);
   const operators = new Set(["&&", "||", "!", "(", ")"]);
   
+  // const nameRow = "[^\\[\\]&|!]+?";
+  // let pattern = `^\s*(?:a\s*(?!_\s*[^\d\s:]*$)(?<min_d>:?\d+)?\s*_?\s*(?<max_d>-?\d+)?\s*(?:\s*"\s*(?<attrib_ref>${nameRow})\s*"\s*(?:\[\s*"\s*(?<attrib_ref_col>${nameRow})\s*"\s*\])?)?\s*"\s*(?<precedent>${nameRow})\s*"\s*(?:\[\s*"\s*(?<precedent_col>${nameRow})\s*"\s*\])?(?<isAny>\(any\))?)|(?<position>p\s*(?!_\s*[^\d\s:]*$)(?<pos_min_d>-?\d+)?\s*_?\s*(?<pos_max_d>-?\d+)?)\s*$`;
+  // let regex = new RegExp(pattern);
+
   const nameRow = "[^\\[\\]&|!]+?";
-  let pattern = `^\s*(?:a\s*(?!_\s*[^\d\s:]*$)(?<min_d>:?\d+)?\s*_?\s*(?<max_d>-?\d+)?\s*(?:\s*"\s*(?<attrib_ref>${nameRow})\s*"\s*(?:\[\s*"\s*(?<attrib_ref_col>${nameRow})\s*"\s*\])?)?\s*"\s*(?<precedent>${nameRow})\s*"\s*(?:\[\s*"\s*(?<precedent_col>[^\[\]]+)\s*"\s*\])?(?<isAny>\(any\))?)|(?<position>p(?!_\s*[^\d\s:]*$)\s*(?<min_d>:?\d+)?\s*_?\s*(?<max_d>-?\d+)?)\s*$`;
+  let pattern = `^\\s*(?:a\\s*(?!_\\s*[^\\d\\s:]*$)(?<min_d>:?\\d+)?\\s*_?\\s*(?<max_d>-?\\d+)?\\s*(?:\\s*"\\s*(?<attrib_ref>${nameRow})\\s*"\\s*(?:\\[\\s*"\\s*(?<attrib_ref_col>${nameRow})\\s*"\\s*\\])?)?\\s*"\\s*(?<precedent>${nameRow})\\s*"\\s*(?:\\[\\s*"\\s*(?<precedent_col>${nameRow})\\s*"\\s*\\])?(?<isAny>\\(any\\))?)|(?<position>p\\s*(?!_\\s*[^\\d\\s:]*$)(?<pos_min_d>-?\\d+)?\\s*_?\\s*(?<pos_max_d>-?\\d+)?)\\s*$`;
   let regex = new RegExp(pattern);
+
+
   let replacedWithWords = trimmedResult.map(item => {
     if (!operators.has(item)) {
       const match = str.match(regex);
@@ -1911,6 +1860,10 @@ function replaceWithSameWord(str) {
         throw Error("incorrect condition.");
       }
       const groups = match.groups; // The last element in args array is the groups object
+      groups.min_d = groups.pos_min_d;
+      groups.max_d = groups.pos_max_d;
+      delete groups.pos_min_d;
+      delete groups.pos_max_d;
 
       if (!replacements[match[0]]) {
         const newWord = `word${wordCounter++}`;
@@ -2004,6 +1957,23 @@ app.post('/execute', async (req, res) => {
     values0[body.sheetCodeName] = body.values;
     sorting[body.sheetCodeName] = false;
     prevLine[body.sheetCodeName] = 0;
+  } else if (funcName == "show") {
+    // Modifie cette commande pour inclure l'AppUserModelID ou le chemin du fichier exécutable
+    const command = `powershell -Command "Start-Process explorer.exe shell:AppsFolder\\a6714fbe-7044-42de-b8ab-099055a0b3b2_fc2wt02jznpqm!App"`;
+    
+    exec(command, (error, stdout, stderr) => {
+        if (error) {
+            console.error(`Erreur lors de l'exécution de l'application: ${error.message}`);
+            res.status(500).send(`Erreur: ${error.message}`);
+            return;
+        }
+        if (stderr) {
+            console.error(`Erreur standard: ${stderr}`);
+            res.status(500).send(`Erreur standard: ${stderr}`);
+            return;
+        }
+        console.log(`Résultat: ${stdout}`);
+    });
   }
   let empty = true;
   for (const msgT in response[0]["listBoxList"]) {
@@ -2053,12 +2023,11 @@ function checkGraph(graph, threshold) {
   const parent = new Array(numNodes).fill(null); // Track the parent of each node to reconstruct paths
 
   // Loop over each node in the graph
-  for (let i0 = 0; i0 < allMediaRows.length; i0++) {
-    let node = allMediaRows[i0];
-    if (visited[node]) continue; // If the node is already visited, skip it
+  for(const i of allMediaRows) {
+    if (visited[i]) continue; // If the node is already visited, skip it
 
     // Use an explicit stack for DFS (non-recursive)
-    const stack = [{ node: node, minDist: 0, maxDist: Infinity, path: [node] }]; // Each stack element holds the node, distance, and path
+    const stack = [{ node: i, minDist: 0, maxDist: Infinity, path: [i] }]; // Each stack element holds the node, distance, and path
 
     while (stack.length > 0) {
       const { node: currentNode, minDist: currentMinDist, maxDist: currentMaxDist, path: currentPath } = stack[stack.length - 1]; // Peek the top of the stack
@@ -2081,7 +2050,8 @@ function checkGraph(graph, threshold) {
       let hasUnvisitedNeighbor = false;
 
       // Explore all neighbors
-      for (const [neighbor, min_d, max_d] of graph[currentNode].posteriors) {
+      console.log(`${graph[currentNode].posteriors.length}`)
+      for (const {precedent: neighbor, min_d, max_d} of graph[currentNode].posteriors) {
         if (inStack[neighbor]) {
           // If a neighbor is already in the stack, we've found a cycle
           let cyclePath = [...currentPath, neighbor];
@@ -2128,12 +2098,12 @@ function transformTerms(expression, transformFunc, reverseReplacements, newInds)
   return [operator, ...transformedOperands];
 }
 
-function exampleTransform(reverseReplacements, newInd, term) {
+function exampleTransform(reverseReplacements, newInds, term) {
   let groups = reverseReplacements[term][0];
   if(groups.precedent_is_att === false) {
-    groups.precedent = newInd[groups.precedent];
+    groups.precedent = newInds[groups.precedent];
   }
-  return ;
+  return groups;
 }
 
 function transformLogicalFormula(tokens) {
