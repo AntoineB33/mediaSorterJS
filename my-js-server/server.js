@@ -41,7 +41,7 @@ var columnTypes;
 var child;
 var data;
 var allMediaRows;
-var attrOfAttr;
+var attrOfAttr = [];
 var headerNames;
 var nameSt = "names";
 var nameInd;
@@ -184,6 +184,9 @@ async function handleChange(updates) {
   } else {
     colNumb = 0;
   }
+  if(values[1].length == 5 && values[0].length == 6) {
+    let y = 4;
+  }
   for(let i = 0; i < updates.length; i++) {
     var row = updates[i][0] - 1;  // Adjusting for zero-based index
     var column = updates[i][1] - 1;  // Adjusting for zero-based index
@@ -198,7 +201,7 @@ async function handleChange(updates) {
         values0[sheetCodeName].push([]);
       }
       for (let i = 0; i < values.length; i++) {
-        while (values[i].length < colNumb) {
+        while (values[i].length <= colNumb) {
           values[i].push([]);
           values0[sheetCodeName][i].push(null);
         }
@@ -325,6 +328,7 @@ function getAddress(i, j) {
 }
 
 function checkBrack(i, j, k, val, columnTitle) {
+  val = val.toLowerCase();
   let isAtt = -2;
   if(columnTitle !== undefined) {
     let columnInd = -1;
@@ -351,7 +355,7 @@ function checkBrack(i, j, k, val, columnTitle) {
   } else {
     for(let key in attNames) {
       for(let m = 0; m < attNames[key].length; m++) {
-        if(attNames[key][m] == theVal) {
+        if(attNames[key][m] == val) {
           if(isAtt != -2) {
             inconsist_replacing_elem(i, nameInd, k, findNewName(val, false), `The attribute at ${getAddress(i, nameInd)} exists in multiple columns.`);
             return -1;
@@ -421,6 +425,9 @@ function getAttributes() {
             attributes.push([]);
             attInd += accAttr[j];
             acc+=1;
+          }
+          if(!data[i]) {
+            continue;
           }
           data[i].attributes.add(attInd);
         }
@@ -721,15 +728,23 @@ async function check() {
   
   data = [-1];
 
-  initializeData();
+  if(initializeData() == -1) {
+    return -1;
+  }
   stop = false;
   attributes = [];
 
-  getAttributes();
+  if(getAttributes() == -1) {
+    return -1;
+  }
 
-  getNames();
+  if(getNames() == -1) {
+    return -1;
+  }
 
-  setAllAttr();
+  if(setAllAttr() == -1) {
+    return -1;
+  }
 
   await getConditions();
 }
@@ -1620,9 +1635,6 @@ function findNewName(name, checked = true) {
 function correct() {
   for (let i = 1; i < nbLineBef; i++) {
     for (let j = 0; j < colNumb; j++) {
-      if (!Array.isArray(values[i][j])) {
-        console.log("NOT");
-      }
       let value = values[i][j].join("; ");
       if (values0[sheetCodeName][i][j] != value) {
         values0[sheetCodeName][i][j] = value;
@@ -1644,7 +1656,7 @@ function customSort(a, b) {
 
 function dataGeneratorSub() {
   if (!resolved[sheetCodeName]) {
-    return;
+    return -1;
   }
 
   correct();
@@ -1959,6 +1971,8 @@ app.post('/execute', async (req, res) => {
     prevLine[body.sheetCodeName] = 0;
   } else if (funcName == "show") {
     // Modifie cette commande pour inclure l'AppUserModelID ou le chemin du fichier exécutable
+
+
     const command = `powershell -Command "Start-Process explorer.exe shell:AppsFolder\\a6714fbe-7044-42de-b8ab-099055a0b3b2_fc2wt02jznpqm!App"`;
     
     exec(command, (error, stdout, stderr) => {

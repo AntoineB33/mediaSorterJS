@@ -13,7 +13,16 @@
 
 
 
+Private Sub ImgButton_Click()
+    Module1.StoreImageFromClipboard
+    Module1.DisplayStoredImage
+End Sub
+
 Private Sub WatchButton_Click()
+    ThisWorkbook.CallJavaScriptFunctionAsync "show", False
+End Sub
+
+Private Sub watchFromButton_Click()
     ThisWorkbook.CallJavaScriptFunctionAsync "show", False
 End Sub
 
@@ -28,6 +37,10 @@ Private Sub SortButton_Click()
         updateButton.Visible = True
     End If
     sorting(sheetCodeName) = Not sorting(sheetCodeName)
+End Sub
+
+Private Sub ThumbnailsButton_Click()
+    
 End Sub
 
 Private Sub updateButton_Click()
@@ -75,5 +88,4 @@ End Sub
 Private Sub UserForm_Click()
 
 End Sub
-
 

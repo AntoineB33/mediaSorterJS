@@ -1,8 +1,16 @@
 'xlwings vba edit
-
 Private Declare PtrSafe Function Sleep Lib "kernel32" (ByVal dwMilliseconds As Long) As Long
 Private Declare PtrSafe Sub GetLocalTime Lib "kernel32" (lpSystemTime As SYSTEMTIME)
-
+Private Type SYSTEMTIME
+    wYear As Integer
+    wMonth As Integer
+    wDayOfWeek As Integer
+    wDay As Integer
+    wHour As Integer
+    wMinute As Integer
+    wSecond As Integer
+    wMilliseconds As Integer
+End Type
 Dim labelTopPos As Integer
 Dim labelLeftPos As Integer
 Dim labelHeight As Integer
@@ -19,26 +27,10 @@ Dim sorting As Object
 Dim targetAddress As Object
 Dim newCollection As Collection
 Dim logFile As String
-
 Private LabelHandlers As Collection
-
 Public sheetCodeName As String
 Public listBoxList As Object
 Public ListSuggSt As String
-
-
-Private Type SYSTEMTIME
-    wYear As Integer
-    wMonth As Integer
-    wDayOfWeek As Integer
-    wDay As Integer
-    wHour As Integer
-    wMinute As Integer
-    wSecond As Integer
-    wMilliseconds As Integer
-End Type
-
-
 Private Sub Workbook_Open()
     labelTopPos = 150
     labelLeftPos = 0
