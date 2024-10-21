@@ -34,7 +34,8 @@ var updating = false;
 var handleRunning = false;
 var checkRunning = false;
 var sheetCodeName;
-var selectedCells = {};
+var editRow = {};
+var editCol = {};
 var resolved = {};
 var oldVersionsMaxNb = 20;
 var columnTypes;
@@ -120,17 +121,9 @@ function handleSelectLinks() {
   if(!resolved[sheetCodeName]) {
     return -1;
   }
-  const match = selectedCells[sheetCodeName].match(/\$?([A-Z]+)\$?(\d+)/);
-  const columnLetters = match[1];
-  const row = +match[2] - 1;
   
-  // Convert column letters to a number
-  let column = 0;
-  for (let i = 0; i < columnLetters.length; i++) {
-    column = column * 26 + (columnLetters.charCodeAt(i) - 'A'.charCodeAt(0) + 1);
-  }
-  column -= 1
-  
+  let row = editRow[sheetCodeName];
+  let column = editCol[sheetCodeName];
   if(row>=nbLineBef || column >= colNumb) {
     return -1;
   }
@@ -1948,7 +1941,8 @@ app.post('/execute', async (req, res) => {
   if (funcName === 'handleChange') {
     await handleChange(body.changes);
   } else if (funcName === 'selectionChange') {
-    selectedCells[sheetCodeName] = body.selection;
+    editRow[sheetCodeName] = body.editRow;
+    editCol[sheetCodeName] = body.editCol;
     handleSelectLinks();
   } else if (funcName === 'chgSheet') {
     sheetCodeName = body.sheetCodeName;
@@ -1970,10 +1964,11 @@ app.post('/execute', async (req, res) => {
     sorting[body.sheetCodeName] = false;
     prevLine[body.sheetCodeName] = 0;
   } else if (funcName == "show") {
+    if(!resolved[sheetCodeName]) {
+      return -1;
+    }
     // Modifie cette commande pour inclure l'AppUserModelID ou le chemin du fichier exécutable
-
-
-    const command = `powershell -Command "Start-Process explorer.exe shell:AppsFolder\\a6714fbe-7044-42de-b8ab-099055a0b3b2_fc2wt02jznpqm!App"`;
+    const command = `powershell -Command "Start-Process explorer.exe shell:AppsFolder\\a6714fbe-7044-42de-b8ab-099055a0b3b2_fc2wt02jznpqm!App" ${Math.max(0, body.orderedVideos)}`;
     
     exec(command, (error, stdout, stderr) => {
         if (error) {

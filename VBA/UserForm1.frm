@@ -13,17 +13,21 @@
 
 
 
+Public editRow As Long
+Public editColumn As Long
+
+
 Private Sub ImgButton_Click()
     Module1.StoreImageFromClipboard
     Module1.DisplayStoredImage
 End Sub
 
 Private Sub WatchButton_Click()
-    ThisWorkbook.CallJavaScriptFunctionAsync "show", False
+    ThisWorkbook.CallJavaScriptFunctionAsync "show", False, "orderedVideos", 0
 End Sub
 
 Private Sub watchFromButton_Click()
-    ThisWorkbook.CallJavaScriptFunctionAsync "show", False
+    ThisWorkbook.CallJavaScriptFunctionAsync "show", False, "orderedVideos", editRow - 2
 End Sub
 
 Private Sub SortButton_Click()
@@ -40,11 +44,7 @@ Private Sub SortButton_Click()
 End Sub
 
 Private Sub ThumbnailsButton_Click()
-    
-End Sub
-
-Private Sub updateButton_Click()
-    
+    Module1.DisplayImagesInUserForm
 End Sub
 
 Private Sub ctrlZButton_Click()
@@ -82,10 +82,28 @@ End Sub
 Private Sub UserForm_Initialize()
     ' Set UserForm properties
     Me.BackColor = RGB(255, 255, 255) ' Set background color to white (same as Excel)
-End Sub
 
+    
+    ' Get the width of the Excel application window
+    Dim appWidth As Long
+    appWidth = Application.Width
+
+    ' Get the left position of the Excel application window
+    Dim appLeft As Long
+    appLeft = Application.Left
+    
+    ' Get the width of the active window (workbook window)
+    Dim sheetWidth As Long
+    sheetWidth = ActiveWindow.Width
+
+    ' Set the Left property of the UserForm to position it more to the right
+    ' We'll position the UserForm near the right edge of the Excel application window
+    Me.Left = appLeft + (sheetWidth * 0.75) ' Adjust multiplier to shift more or less to the right
+
+    ' Optionally, set the Top property if you want to adjust the vertical position
+    Me.Top = Application.Top + 100 ' Example, adjust as needed
+End Sub
 
 Private Sub UserForm_Click()
 
 End Sub
-
