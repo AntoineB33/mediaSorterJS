@@ -13,13 +13,9 @@
 
 
 
-Public editRow As Long
-Public editColumn As Long
-
-
 Private Sub ImgButton_Click()
-    Module1.StoreImageFromClipboard
-    Module1.DisplayStoredImage
+    StoreImageFromClipboard
+    DisplayStoredImage
 End Sub
 
 Private Sub WatchButton_Click()
@@ -44,7 +40,7 @@ Private Sub SortButton_Click()
 End Sub
 
 Private Sub ThumbnailsButton_Click()
-    Module1.DisplayImagesInUserForm
+    DisplayImagesInUserForm
 End Sub
 
 Private Sub ctrlZButton_Click()

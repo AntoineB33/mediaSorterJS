@@ -8,11 +8,11 @@
 
 Private Sub Worksheet_SelectionChange(ByVal Target As range)
     ' Call the sub from ThisWorkbook
-    UserForm1.editRow = activeCell.Row
+    editRow = activeCell.Row
     Dim selectedRow As Long
-    selectedRow = UserForm1.editRow
-    UserForm1.editColumn = activeCell.Column
-    CallJavaScriptFunctionAsync "selectionChange", True, "editRow", UserForm1.editRow, "editCol", UserForm1.editColumn
+    selectedRow = editRow
+    editColumn = activeCell.Column
+    CallJavaScriptFunctionAsync "selectionChange", True, "editRow", editRow, "editCol", editColumn
     
     Dim imgControl As MSForms.Image
     Dim lblControl As MSForms.Label
