@@ -2,10 +2,11 @@
 
 
 Private Sub Workbook_Open()
-    editRow = 0
+    editRow = activeCell.Row
     thumbnailHeight = 200
     formHeight = 1200
     spacing = 10
+    leftSpacing = 10
     labelTopPos = 150
     labelLeftPos = 0
     labelHeight = 18
