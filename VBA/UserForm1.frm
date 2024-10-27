@@ -40,7 +40,9 @@ Private Sub SortButton_Click()
 End Sub
 
 Private Sub ThumbnailsButton_Click()
-    DisplayImagesInUserForm
+    If Not thbnlDisplayed Then
+        DisplayImagesInUserForm
+    End If
 End Sub
 
 Private Sub ctrlZButton_Click()
