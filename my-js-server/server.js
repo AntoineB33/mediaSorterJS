@@ -714,6 +714,8 @@ async function getConditions() {
     ]
   };
   // let result = await callCProgram(exampleInput);
+  
+  resolved[sheetCodeName] = true;
 }
 
 async function check() {
@@ -1653,6 +1655,59 @@ function dataGeneratorSub() {
   }
 
   correct();
+
+
+  
+  // Example data to pass to the C program
+  let data = [{
+    ulteriors: [5, 12, 7],
+    conditions: ["A", "B", "C"],
+    nbPost: 3,
+    highest: 10
+  }];
+  // data = {"name": "John", "age": 30}
+
+  
+  const programPath = "C:/Users/abarb/Documents/health/news_underground/mediaSorter/programs/c_prog/mediaSorter/x64/Release/mediaSorter.exe";
+  
+  
+  // Convert the object to JSON and write it to a file
+  fs.writeFile('C:/Users/abarb/Documents/health/news_underground/mediaSorter/programs/data/data.json', JSON.stringify(data, null, 2), (err) => {
+    if (err) throw err;
+    console.log('Data has been written to data.json');
+  });
+
+  exec(programPath, (error, stdout, stderr) => {
+    if (error) {
+      console.error(`Error executing program: ${error}`);
+      return;
+    }
+    if (stderr) {
+      console.error(`Error output: ${stderr}`);
+      return;
+    }
+    // Output from the C program will be in stdout
+    console.log(`Program output: ${stdout}`);
+  });
+  
+  // const child = exec(programPath);
+
+  // // Convert the data object to a JSON string
+  // const jsonData = JSON.stringify(data);
+
+  // Send the JSON data to the C program's stdin
+  // child.stdin.write(jsonData);
+  // child.stdin.end();
+
+  // // Capture output from C program
+  // child.stdout.on("data", (output) => {
+  //   console.log(`Output from C program: ${output}`);
+  // });
+
+  // child.stderr.on("data", (error) => {
+  //   console.error(`Error from C program: ${error}`);
+  // });
+  return;
 
 
   for (let i = 0; i < lenAgg; i++) {

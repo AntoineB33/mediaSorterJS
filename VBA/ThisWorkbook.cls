@@ -134,7 +134,7 @@ Private Sub Workbook_SheetActivate(ByVal Sh As Object)
     Else
         give_headerColors
     End If
-    CallJavaScriptFunctionAsync "selectionChange", True, "selection", targetAddress(sheetCodeName)
+    CallJavaScriptFunctionAsync "selectionChange", True, "editRow", activeCell.Row, "editCol", activeCell.Column
 End Sub
 
 Private Sub Workbook_SheetChange(ByVal Sh As Object, ByVal Target As range)

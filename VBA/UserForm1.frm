@@ -19,24 +19,28 @@ Private Sub ImgButton_Click()
 End Sub
 
 Private Sub WatchButton_Click()
-    ThisWorkbook.CallJavaScriptFunctionAsync "show", False, "orderedVideos", 0
+    CallJavaScriptFunctionAsync "show", False, "orderedVideos", 0
 End Sub
 
 Private Sub watchFromButton_Click()
-    ThisWorkbook.CallJavaScriptFunctionAsync "show", False, "orderedVideos", editRow - 2
+    CallJavaScriptFunctionAsync "show", False, "orderedVideos", editRow - 2
 End Sub
 
 Private Sub SortButton_Click()
     sheetVBA.Protect UserInterfaceOnly:=sorting(sheetCodeName)
     If sorting(sheetCodeName) Then
         SortButton.Caption = "Sort"
-        updateButton.Visible = False
+        UpdateSortButton.ForeColor = RGB(128, 128, 128)
     Else
         SortButton.Caption = "Stop sorting"
-        ThisWorkbook.CallJavaScriptFunctionAsync "dataGeneratorSub", True
-        updateButton.Visible = True
+        CallJavaScriptFunctionAsync "dataGeneratorSub", True
+        UpdateSortButton.ForeColor = RGB(0, 0, 0)
     End If
     sorting(sheetCodeName) = Not sorting(sheetCodeName)
+End Sub
+
+Private Sub UpdateSortButton_Click()
+
 End Sub
 
 Private Sub ThumbnailsButton_Click()
@@ -46,11 +50,11 @@ Private Sub ThumbnailsButton_Click()
 End Sub
 
 Private Sub ctrlZButton_Click()
-    ThisWorkbook.CallJavaScriptFunctionAsync "ctrlZ", True
+    CallJavaScriptFunctionAsync "ctrlZ", True
 End Sub
 
 Private Sub ctrlYButton_Click()
-    ThisWorkbook.CallJavaScriptFunctionAsync "ctrlY", True
+    CallJavaScriptFunctionAsync "ctrlY", True
 End Sub
 
 Private Sub PowerPointButton_Click()
@@ -58,7 +62,7 @@ Private Sub PowerPointButton_Click()
 End Sub
 
 Private Sub oldNameInput_Change()
-    ThisWorkbook.CallJavaScriptFunctionAsync "handleoldNameInputClick", True
+    CallJavaScriptFunctionAsync "handleoldNameInputClick", True
 End Sub
 
 Private Sub oldNameInput_KeyDown(ByVal KeyCode As MSForms.ReturnInteger, ByVal Shift As Integer)
@@ -73,7 +77,7 @@ End Sub
 
 Private Sub newNameInput_KeyDown(ByVal KeyCode As MSForms.ReturnInteger, ByVal Shift As Integer)
     If KeyCode = vbKeyReturn Then
-        ThisWorkbook.CallJavaScriptFunctionAsync "renameSymbol", True, "oldValue", oldNameInput.Text, "newValue", newNameInput.Text
+        CallJavaScriptFunctionAsync "renameSymbol", True, "oldValue", oldNameInput.Text, "newValue", newNameInput.Text
     End If
 End Sub
 
