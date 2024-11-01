@@ -12,8 +12,6 @@ var msgTypeColors = [{ r: 255, g: 0, b: 0 }, { r: 255, g: 137, b: 0 }, { r: 0, g
 var updateRegularity = 1;
 
 var values = {};
-var oldValues = [];
-var indOldValues = 0;
 var stop = false;
 var prevLine = {};
 var nbLineBef;
@@ -50,6 +48,8 @@ var mediaInd = -1;
 var headerColors;
 var attNames;
 var actionsHistory = {};
+var indActHist = 0;
+let handleChanges = {};
 
 // [node.js]
 var response;
@@ -95,13 +95,13 @@ function getColumnTag(num) {
  *  Update the links to show at the menu each time a cell is selected
  * 
  */
-function handleSelectLinks(workbookCodeName, sheetCodeName) {
+function handleSelectLinks(sheetCodeName) {
   // only if no errors in the sheet
   if(!resolved[sheetCodeName]) {
     return -1;
   }
 
-  let values = values[workbookCodeName][sheetCodeName];
+  let values = values[sheetCodeName];
   
   let row = editRow[sheetCodeName];
   let column = editCol[sheetCodeName];
@@ -163,14 +163,9 @@ function addToSupDic(dic, key1, key2, value) {
   addToDic(dic[key1], key2, value);
 }
 
-let handleChanges = {};
-
-function updateCell(workbookCodeName, sheetCodeName, row, column, value) {
-  
-}
-
-async function handleChange(updates, workbookCodeName, sheetCodeName) {
-  let values = values[workbookCodeName][sheetCodeName];
+async function handleChange(updates, sheetCodeName) {
+  let values = values[sheetCodeName];
+  let values0 = values0[sheetCodeName];
   nbLineBef = values.length;
   if(nbLineBef > 0) {
     colNumb = values[0].length;
@@ -203,9 +198,10 @@ async function handleChange(updates, workbookCodeName, sheetCodeName) {
           .map(v => v.trim().toLowerCase())
           .filter(e => e !== "");
       values[row][column] = splitValue;
+      values0[row][column] = value;
     } else {
       values[row][column] = [];
-      values0[sheetCodeName][row][column] = value;
+      values0[row][column] = value;
       const nbLineBefBef = nbLineBef;
       for (let i = nbLineBef - 1; i > 0; i--) {
         if (values[i].some(v => v.length != 0)) {
@@ -214,7 +210,7 @@ async function handleChange(updates, workbookCodeName, sheetCodeName) {
         nbLineBef--;
       }
       values.splice(nbLineBef, nbLineBefBef - nbLineBef);
-      values0[sheetCodeName].splice(nbLineBef, nbLineBefBef - nbLineBef);
+      values0.splice(nbLineBef, nbLineBefBef - nbLineBef);
       if(column === colNumb - 1) {
         let newColNumb = colNumb;
         let stop = false;
@@ -233,7 +229,7 @@ async function handleChange(updates, workbookCodeName, sheetCodeName) {
         if(newColNumb != colNumb) {
           for(let i = 0; i < nbLineBef; i++) {
             values[i].splice(newColNumb, colNumb - newColNumb);
-            values0[sheetCodeName][i].splice(newColNumb, colNumb - newColNumb);
+            values0[i].splice(newColNumb, colNumb - newColNumb);
           }
         }
       }
@@ -313,16 +309,16 @@ async function handleChange(updates, workbookCodeName, sheetCodeName) {
   }
 }
 
-async function handleChangeCaller(updates, workbookCodeName, sheetCodeName) {
+async function handleChangeCaller(updates, sheetCodeName) {
   if(sorting[sheetCodeName]) {
-    addToSupDic(handleChanges, workbookCodeName, sheetCodeName, updates);
+    addToSupDic(handleChanges, sheetCodeName, updates);
     setTimeout(() => {
       // This will run scheduledFunction after 10 seconds
-      handleChangeCaller(updates, workbookCodeName, sheetCodeName);
+      handleChangeCaller(updates, sheetCodeName);
     }, 1000);
   }
-  for(let sheet in handleChanges[workbookCodeName]) {
-    handleChange(handleChanges[workbookCodeName][sheet], workbookCodeName, sheet);
+  for(let sheet in handleChanges) {
+    handleChange(handleChanges[sheet], sheet);
   }
   for(let wb in handleChanges) {
     for(let sheet in handleChanges[wb]) {
