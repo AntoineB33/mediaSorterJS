@@ -11,8 +11,7 @@ app.use(express.json());
 var msgTypeColors = [{ r: 255, g: 0, b: 0 }, { r: 255, g: 137, b: 0 }, { r: 0, g: 145, b: 255 }];
 var updateRegularity = 1;
 
-var values0 = {};
-var values = [];
+var values = {};
 var oldValues = [];
 var indOldValues = 0;
 var stop = false;
@@ -50,6 +49,7 @@ var mediaSt = "media";
 var mediaInd = -1;
 var headerColors;
 var attNames;
+var actionsHistory = {};
 
 // [node.js]
 var response;
@@ -77,27 +77,6 @@ const Actions = {
   NewBgCol: 3
 }
 
-
-class Node {
-    constructor(value) {
-        this.value = value;
-        this.left = null;
-        this.right = null;
-    }
-}
-
-
-async function callCProgram(obj) {
-  // Convert the object to a JSON string
-  const jsonString = JSON.stringify(obj);
-  
-  // Pass the JSON string as an argument to the C program
-  const { stdout } = await execPromise(`"${exePath}" '${jsonString}'`);
-  
-  // Parse the result back from C (assuming C returns a JSON string)
-  return JSON.parse(stdout.trim());
-}
-
 /**
  * Converts a given 0-based integer to its corresponding Excel column tag.
  * @param {number} num - The integer to be converted to a column tag.
@@ -116,11 +95,13 @@ function getColumnTag(num) {
  *  Update the links to show at the menu each time a cell is selected
  * 
  */
-function handleSelectLinks() {
+function handleSelectLinks(workbookCodeName, sheetCodeName) {
   // only if no errors in the sheet
   if(!resolved[sheetCodeName]) {
     return -1;
   }
+
+  let values = values[workbookCodeName][sheetCodeName];
   
   let row = editRow[sheetCodeName];
   let column = editCol[sheetCodeName];
@@ -170,7 +151,26 @@ function handleSelectLinks() {
   }
 }
 
-async function handleChange(updates) {
+function addToDic(dic, key, value) {
+  if(dic[key] === undefined) {
+    dic[key] = [];
+  }
+  dic[key].push(value);
+}
+
+function addToSupDic(dic, key1, key2, value) {
+  addToDic(dic, key1, {});
+  addToDic(dic[key1], key2, value);
+}
+
+let handleChanges = {};
+
+function updateCell(workbookCodeName, sheetCodeName, row, column, value) {
+  
+}
+
+async function handleChange(updates, workbookCodeName, sheetCodeName) {
+  let values = values[workbookCodeName][sheetCodeName];
   nbLineBef = values.length;
   if(nbLineBef > 0) {
     colNumb = values[0].length;
@@ -191,12 +191,10 @@ async function handleChange(updates) {
       }
       while(values.length <= row) {
         values.push([]);
-        values0[sheetCodeName].push([]);
       }
       for (let i = 0; i < values.length; i++) {
         while (values[i].length <= colNumb) {
           values[i].push([]);
-          values0[sheetCodeName][i].push(null);
         }
       }
       let splitValue = [];
@@ -205,7 +203,6 @@ async function handleChange(updates) {
           .map(v => v.trim().toLowerCase())
           .filter(e => e !== "");
       values[row][column] = splitValue;
-      values0[sheetCodeName][row][column] = value;
     } else {
       values[row][column] = [];
       values0[sheetCodeName][row][column] = value;
@@ -308,11 +305,29 @@ async function handleChange(updates) {
 
 
 
-  await check();
+  await check(sheetCodeName);
   oldValues.splice(indOldValues, oldValues.length - 1 - indOldValues);
   oldValues.push(values);
   if(oldVersionsMaxNb < oldValues.length) {
     oldValues.shift();
+  }
+}
+
+async function handleChangeCaller(updates, workbookCodeName, sheetCodeName) {
+  if(sorting[sheetCodeName]) {
+    addToSupDic(handleChanges, workbookCodeName, sheetCodeName, updates);
+    setTimeout(() => {
+      // This will run scheduledFunction after 10 seconds
+      handleChangeCaller(updates, workbookCodeName, sheetCodeName);
+    }, 1000);
+  }
+  for(let sheet in handleChanges[workbookCodeName]) {
+    handleChange(handleChanges[workbookCodeName][sheet], workbookCodeName, sheet);
+  }
+  for(let wb in handleChanges) {
+    for(let sheet in handleChanges[wb]) {
+      handleChange(handleChanges[wb][sheet], wb, sheet);
+    }
   }
 }
 
@@ -379,7 +394,7 @@ function initializeData() {
   }
 }
 
-function getAttributes() {
+function getAttributes(sheetCodeName) {
   // attributes
   let accAttr = {};
   let acc = 0;
@@ -520,7 +535,7 @@ function addFormula(i, formula) {
   }
 }
 
-async function getConditions() {
+async function getConditions(sheetCodeName) {
   let optConds = false;
   for(const i of allMediaRows) {
     let formula = [];
@@ -718,7 +733,7 @@ async function getConditions() {
   resolved[sheetCodeName] = true;
 }
 
-async function check() {
+async function check(sheetCodeName) {
   resolved[sheetCodeName] = false;
   
   data = [-1];
@@ -729,7 +744,7 @@ async function check() {
   stop = false;
   attributes = [];
 
-  if(getAttributes() == -1) {
+  if(getAttributes(sheetCodeName) == -1) {
     return -1;
   }
 
@@ -741,7 +756,7 @@ async function check() {
     return -1;
   }
 
-  await getConditions();
+  await getConditions(sheetCodeName);
 }
 
 
@@ -1627,7 +1642,7 @@ function findNewName(name, checked = true) {
   return name;
 }
 
-function correct() {
+function correct(sheetCodeName) {
   for (let i = 1; i < nbLineBef; i++) {
     for (let j = 0; j < colNumb; j++) {
       let value = values[i][j].join("; ");
@@ -1649,23 +1664,50 @@ function customSort(a, b) {
   }
 }
 
-function dataGeneratorSub() {
+function dataGeneratorSub(sheetCodeName) {
   if (!resolved[sheetCodeName]) {
     return -1;
   }
 
-  correct();
-
-
+  correct(sheetCodeName);
   
   // Example data to pass to the C program
-  let data = [{
-    ulteriors: [5, 12, 7],
-    conditions: ["A", "B", "C"],
-    nbPost: 3,
-    highest: 10
-  }];
-  // data = {"name": "John", "age": 30}
+  let dataJson = [
+    {
+      ulteriors: [],
+      conditions: [],
+      nbPost: 0,
+      highest: -1
+    },
+    {
+      ulteriors: [0],
+      conditions: [],
+      nbPost: 0,
+      highest: -1
+    },
+    {
+      ulteriors: [0],
+      conditions: [],
+      nbPost: 0,
+      highest: -1
+    },
+    {
+      ulteriors: [1, 2],
+      conditions: [],
+      nbPost: 0,
+      highest: -1
+    }
+  ];
+  dataJson = [];
+  for(let i = 0; i < lenAgg; i++) {
+    dataJson.push({
+      ulteriors: data[i].ulteriors,
+      conditions: data[i].conditions,
+      nbPost: data[i].nbPost,
+      highest: data[i].highest
+    });
+  }
+
 
   
   const programPath = "C:/Users/abarb/Documents/health/news_underground/mediaSorter/programs/c_prog/mediaSorter/x64/Release/mediaSorter.exe";
@@ -1689,24 +1731,6 @@ function dataGeneratorSub() {
     // Output from the C program will be in stdout
     console.log(`Program output: ${stdout}`);
   });
-  
-  // const child = exec(programPath);
-
-  // // Convert the data object to a JSON string
-  // const jsonData = JSON.stringify(data);
-
-  // Send the JSON data to the C program's stdin
-  // child.stdin.write(jsonData);
-  // child.stdin.end();
-
-  // // Capture output from C program
-  // child.stdout.on("data", (output) => {
-  //   console.log(`Output from C program: ${output}`);
-  // });
-
-  // child.stderr.on("data", (error) => {
-  //   console.error(`Error from C program: ${error}`);
-  // });
   return;
 
 
@@ -1819,7 +1843,7 @@ function dataGeneratorSub() {
 
 }
 
-async function renameSymbol(oldValue, newValue) {
+async function renameSymbol(sheetCodeName, oldValue, newValue) {
   if(!resolved[sheetCodeName]) {
     return -1;
   }
@@ -1856,9 +1880,9 @@ async function renameSymbol(oldValue, newValue) {
       }
     }
   }
-  correct();
+  correct(sheetCodeName);
   response.push({ "Renamings": [`renamed (${nbRen})`] });
-  await check();
+  await check(sheetCodeName);
 }
 
 function handleoldNameInputClick() {
@@ -1874,21 +1898,21 @@ function handleoldNameInputClick() {
   response.push({ "newNameInput": [values[rowId][0].join("; ")] });
 }
 
-async function ctrlZ() {
+async function ctrlZ(sheetCodeName) {
   if (indOldValues > 0) {
     indOldValues--;
     values = oldValues[indOldValues];
-    correct();
-    await check();
+    correct(sheetCodeName);
+    await check(sheetCodeName);
   }
 }
 
-async function ctrlY() {
+async function ctrlY(sheetCodeName) {
   if (indOldValues < oldValues.length - 1) {
     indOldValues++;
     values = oldValues[indOldValues];
-    correct();
-    await check();
+    correct(sheetCodeName);
+    await check(sheetCodeName);
   }
 }
 
@@ -1993,51 +2017,71 @@ app.post('/execute', async (req, res) => {
   }
   let body = req.body;
   const funcName = body.functionName;
-  if (funcName === 'handleChange') {
-    await handleChange(body.changes);
-  } else if (funcName === 'selectionChange') {
-    editRow[sheetCodeName] = body.editRow;
-    editCol[sheetCodeName] = body.editCol;
-    handleSelectLinks();
-  } else if (funcName === 'chgSheet') {
-    sheetCodeName = body.sheetCodeName;
-    headerColors = body.headerColors;
-    values = values0[sheetCodeName].map(r => r.map(c => c===null?[]:c.toString().split(';').map(k => k.trim().toLowerCase()).filter(k => k)));
-    await handleChange([]);
-  } else if (funcName == "dataGeneratorSub") {
-    dataGeneratorSub();
-  } else if (funcName == "renameSymbol") {
-    renameSymbol(body.oldValue, body.newValue);
-  } else if (funcName == "handleoldNameInputClick") {
-    handleoldNameInputClick();
-  } else if (funcName == "ctrlZ") {
-    ctrlZ();
-  } else if (funcName == "ctrlY") {
-    ctrlY();
-  } else if (funcName == "newSheet") {
-    values0[body.sheetCodeName] = body.values;
-    sorting[body.sheetCodeName] = false;
-    prevLine[body.sheetCodeName] = 0;
-  } else if (funcName == "show") {
-    if(!resolved[sheetCodeName]) {
-      return -1;
-    }
-    // Modifie cette commande pour inclure l'AppUserModelID ou le chemin du fichier exécutable
-    const command = `powershell -Command "Start-Process explorer.exe shell:AppsFolder\\a6714fbe-7044-42de-b8ab-099055a0b3b2_fc2wt02jznpqm!App" ${Math.max(0, body.orderedVideos)}`;
-    
-    exec(command, (error, stdout, stderr) => {
-        if (error) {
-            console.error(`Erreur lors de l'exécution de l'application: ${error.message}`);
-            res.status(500).send(`Erreur: ${error.message}`);
-            return;
+  switch (funcName) {
+    case "handleChange":
+      await handleChange(body.changes, sheetCodeName);
+      break;
+    case "selectionChange":
+      editRow[sheetCodeName] = body.editRow;
+      editCol[sheetCodeName] = body.editCol;
+      handleSelectLinks();
+      break;
+    case 'chgSheet':
+      sheetCodeName = body.sheetCodeName;
+      headerColors = body.headerColors;
+      values = values0[sheetCodeName].map(r => r.map(c => c===null?[]:c.toString().split(';').map(k => k.trim().toLowerCase()).filter(k => k)));
+      await handleChange([], sheetCodeName);
+      break;
+    case "dataGeneratorSub":
+      dataGeneratorSub(sheetCodeName);
+      break;
+      case "stop sorting":
+        if(sorting[sheetCodeName]) {
+          // TODO: call the C program to stop sorting
         }
-        if (stderr) {
-            console.error(`Erreur standard: ${stderr}`);
-            res.status(500).send(`Erreur standard: ${stderr}`);
-            return;
-        }
-        console.log(`Résultat: ${stdout}`);
-    });
+        break;
+    case "C stops sorting":
+      response.push({ "stop sorting": [] });
+      sorting[sheetCodeName] = false;
+      break;
+    case "renameSymbol":
+      renameSymbol(sheetCodeName, body.oldValue, body.newValue);
+      break;
+    case "handleoldNameInputClick":
+      handleoldNameInputClick();
+      break;
+    case "ctrlZ":
+      ctrlZ(sheetCodeName);
+      break;
+    case "ctrlY":
+      ctrlY(sheetCodeName);
+      break;
+    case "newSheet":
+      values0[body.sheetCodeName] = body.values;
+      sorting[body.sheetCodeName] = false;
+      prevLine[body.sheetCodeName] = 0;
+      break;
+    case "show":
+      if(!resolved[sheetCodeName]) {
+        return -1;
+      }
+      // Modifie cette commande pour inclure l'AppUserModelID ou le chemin du fichier exécutable
+      const command = `powershell -Command "Start-Process explorer.exe shell:AppsFolder\\a6714fbe-7044-42de-b8ab-099055a0b3b2_fc2wt02jznpqm!App" ${Math.max(0, body.orderedVideos)}`;
+      
+      exec(command, (error, stdout, stderr) => {
+          if (error) {
+              console.error(`Erreur lors de l'exécution de l'application: ${error.message}`);
+              res.status(500).send(`Erreur: ${error.message}`);
+              return;
+          }
+          if (stderr) {
+              console.error(`Erreur standard: ${stderr}`);
+              res.status(500).send(`Erreur standard: ${stderr}`);
+              return;
+          }
+          console.log(`Résultat: ${stdout}`);
+      });
+      break;
   }
   let empty = true;
   for (const msgT in response[0]["listBoxList"]) {

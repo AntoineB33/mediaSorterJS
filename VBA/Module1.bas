@@ -418,6 +418,8 @@ Public Sub CallJavaScriptFunctionAsync(ByVal funcName As String, ParamArray para
     ' Send the request with the function name and parameters
     http.send jsonRequest
 
+    http.oneAnswer = funcName <> "dataGeneratorSub"
+
     ' Add lines of text to the file
     AddLineToTextFile logFile, "Invoke-RestMethod -Uri http://localhost:3000/execute -Method Post -Headers @{ ""Content-Type"" = ""application/json"" } -Body '" & jsonRequest & "'"
     
@@ -493,6 +495,7 @@ Public Sub CheckHttpResponse()
                         '     Set range = sheet.range(sheet.Cells(CInt(VBARequestParts(1)) + 1, 1), sheet.Cells(CInt(VBARequestParts(1)) + 1, 1))
                         '     range.Select
                         Case "listBoxList"
+                            ' the message to display
                             Dim nextTopLabel As Integer
                             nextTopLabel = labelTopPos
                             Dim ctrl As Control
@@ -656,37 +659,40 @@ Public Sub CheckHttpResponse()
                                     LabelHandlers.Add labelHandler
                                 Next oneListItem
                             Next subItem
-                        ' Case "sort"
-                        '     Dim fullName As String
-                        '     fullName = ThisWorkbook.Name
-                        '     Dim suffix As String
-                        '     suffix = Left(fullName, InStrRev(fullName, ".") - 1) & "\" & sheet.Name
-                        '     Dim filePath As String
-                        '     filePath = dataFolderPath & suffix & ".txt"
-                        '     Dim fileNumber As Integer
+                        Case "sort"
+                            Dim fullName As String
+                            fullName = ThisWorkbook.Name
+                            Dim suffix As String
+                            suffix = Left(fullName, InStrRev(fullName, ".") - 1) & "\" & sheet.Name
+                            Dim filePath As String
+                            filePath = dataFolderPath & suffix & ".txt"
+                            Dim fileNumber As Integer
 
                             
-                        '     ' Check if the directory exists, if not, create it
-                        '     If Dir(dataFolderName, vbDirectory) = "" Then
-                        '         MkDir dataFolderName
-                        '     End If
+                            ' Check if the directory exists, if not, create it
+                            If Dir(dataFolderName, vbDirectory) = "" Then
+                                MkDir dataFolderName
+                            End If
 
-                        '     ' Open the file for writing
-                        '     fileNumber = FreeFile
-                        '     Open filePath For Output As fileNumber
+                            ' Open the file for writing
+                            fileNumber = FreeFile
+                            Open filePath For Output As fileNumber
 
-                        '     Dim linesToWriteInFile() As String
-                        '     linesToWriteInFile = Split(VBARequestParts(1), vbLf)
-                        '     For Each Line In linesToWriteInFile
-                        '         Print #fileNumber, Line
-                        '     Next Line
+                            Dim linesToWriteInFile() As String
+                            linesToWriteInFile = Split(VBARequestParts(1), vbLf)
+                            For Each Line In linesToWriteInFile
+                                Print #fileNumber, Line
+                            Next Line
 
-                        '     ' Close the file
-                        '     Close fileNumber
+                            ' Close the file
+                            Close fileNumber
                             
-                        '     Dim cFilePath As String
-                        '     cFilePath = Root & "programs\c_prog\Project2\x64\Debug\Project2.exe " & suffix
-                        '     'ExecuteCFile cFilePath
+                            Dim cFilePath As String
+                            cFilePath = Root & "programs\c_prog\Project2\x64\Debug\Project2.exe " & suffix
+                            'ExecuteCFile cFilePath
+                        Case "stop sorting"
+                            sheetVBA.Unprotect
+                            requests.Remove j
                         ' Case "sorting"
                         '     sorting(sheetCodeName) = Not sorting(sheetCodeName)
                         ' Case "Renamings"
@@ -701,7 +707,9 @@ Public Sub CheckHttpResponse()
                         End Select
                     Next key
                 Next item
-                requests.Remove j
+                If requests(j).oneAnswer Then
+                    requests.Remove j
+                End If
             Else
                 MsgBox "Error: " & http.statusText
                 requests.Remove j
@@ -717,7 +725,7 @@ Public Sub CheckHttpResponse()
 
     If requests.Count > 0 Then
         ' Reschedule the check if there are still pending requests
-        Application.OnTime Now + TimeValue("00:00:01"), "CheckHttpResponse"
+        Application.OnTime Now + TimeValue("00:00:10"), "CheckHttpResponse"
     Else
         timerStarted = False
     End If

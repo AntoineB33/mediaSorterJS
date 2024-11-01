@@ -27,11 +27,12 @@ Private Sub watchFromButton_Click()
 End Sub
 
 Private Sub SortButton_Click()
-    sheetVBA.Protect UserInterfaceOnly:=sorting(sheetCodeName)
     If sorting(sheetCodeName) Then
         SortButton.Caption = "Sort"
         UpdateSortButton.ForeColor = RGB(128, 128, 128)
+        CallJavaScriptFunctionAsync "stop sorting", True
     Else
+        sheetVBA.Protect UserInterfaceOnly:=True
         SortButton.Caption = "Stop sorting"
         CallJavaScriptFunctionAsync "dataGeneratorSub", True
         UpdateSortButton.ForeColor = RGB(0, 0, 0)
