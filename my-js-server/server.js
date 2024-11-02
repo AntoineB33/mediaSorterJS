@@ -9,38 +9,23 @@ const port = 3000;
 app.use(express.json());
 
 var msgTypeColors = [{ r: 255, g: 0, b: 0 }, { r: 255, g: 137, b: 0 }, { r: 0, g: 145, b: 255 }];
-var updateRegularity = 1;
 
-var values = {};
-var stop = false;
+var values0Glob = {};
+var valuesGlob = {};
 var prevLine = {};
 var nbLineBef;
-var fileId = "1EoCDqXsL0tqAW6M7qVQT_N7L_NsBirMJ";
 var lenAgg;
 var attributes;
-var dataAgg;
-var progChg = 0;
 var sorting = {};
-var colors = [];
-var fonts = [];
-var place;
-var steps;
-var visited;
-var notInitialized = true;
-var updating = false;
-var handleRunning = false;
-var checkRunning = false;
 var sheetCodeName;
 var editRow = {};
 var editCol = {};
 var resolved = {};
 var oldVersionsMaxNb = 20;
 var columnTypes;
-var child;
 var data;
 var allMediaRows;
 var attrOfAttr = [];
-var headerNames;
 var nameSt = "names";
 var nameInd;
 var mediaSt = "media";
@@ -77,6 +62,7 @@ const Actions = {
   NewBgCol: 3
 }
 
+
 /**
  * Converts a given 0-based integer to its corresponding Excel column tag.
  * @param {number} num - The integer to be converted to a column tag.
@@ -101,7 +87,7 @@ function handleSelectLinks(sheetCodeName) {
     return -1;
   }
 
-  let values = values[sheetCodeName];
+  let values = valuesGlob[sheetCodeName];
   
   let row = editRow[sheetCodeName];
   let column = editCol[sheetCodeName];
@@ -113,7 +99,7 @@ function handleSelectLinks(sheetCodeName) {
     if(perRef[row] > -1) {
       for(let g = 0; g < 3; g++) {
         if(periods[perRef[row]][g] < nbLineBef && periods[perRef[row]][g]!=row) {
-          displayReference(periods[perRef[row]][g]);
+          displayReference(values, periods[perRef[row]][g]);
         }
       }
     }
@@ -122,15 +108,15 @@ function handleSelectLinks(sheetCodeName) {
       if(column < 4) {
         for(let r = 1; r < values.length; r++) {
           for(let f = 0; f < values[r][0].length; f++) {
-            if(row!=r && searching(r, 0, f)) {
+            if(row!=r && searching(values, r, 0, f)) {
               if(perRef[r] > -1) {
                 for(let g = 0; g < 3; g++) {
                   if(periods[perRef[r]][g]!=-1) {
-                    displayReference(r);
+                    displayReference(values, r);
                   }
                 }
               } else {
-                displayReference(r);
+                displayReference(values, r);
               }
             }
           }
@@ -140,8 +126,8 @@ function handleSelectLinks(sheetCodeName) {
         for(let r = 1; r < values.length; r++) {
           for(let d = 4; d < colNumb - 1; d++) {
             for(let f = 0; f < values[r][d].length; f++) {
-              if(row!=r && searching(r, d, f)) {
-                displayReference(r);
+              if(row!=r && searching(values, r, d, f)) {
+                displayReference(values, r);
               }
             }
           }
@@ -164,8 +150,8 @@ function addToSupDic(dic, key1, key2, value) {
 }
 
 async function handleChange(updates, sheetCodeName) {
-  let values = values[sheetCodeName];
-  let values0 = values0[sheetCodeName];
+  let values = valuesGlob[sheetCodeName];
+  let values0 = values0Glob[sheetCodeName];
   nbLineBef = values.length;
   if(nbLineBef > 0) {
     colNumb = values[0].length;
@@ -186,10 +172,12 @@ async function handleChange(updates, sheetCodeName) {
       }
       while(values.length <= row) {
         values.push([]);
+        values0.push([]);
       }
       for (let i = 0; i < values.length; i++) {
         while (values[i].length <= colNumb) {
           values[i].push([]);
+          values0[i].push(null);
         }
       }
       let splitValue = [];
@@ -260,7 +248,7 @@ async function handleChange(updates, sheetCodeName) {
         mediaInd = j;
       }
       if(alreadyInd.length) {
-        inconsist_removing_elem(0, j, k, `Column ${getColumnTag(j)} labelled as "${alreadyInd[0]}" already at column ${getColumnTag(alreadyInd[1])}.`);
+        inconsist_removing_elem(values, 0, j, k, `Column ${getColumnTag(j)} labelled as "${alreadyInd[0]}" already at column ${getColumnTag(alreadyInd[1])}.`);
         return;
       }
     }
@@ -302,36 +290,18 @@ async function handleChange(updates, sheetCodeName) {
 
 
   await check(sheetCodeName);
-  oldValues.splice(indOldValues, oldValues.length - 1 - indOldValues);
-  oldValues.push(values);
-  if(oldVersionsMaxNb < oldValues.length) {
-    oldValues.shift();
-  }
-}
-
-async function handleChangeCaller(updates, sheetCodeName) {
-  if(sorting[sheetCodeName]) {
-    addToSupDic(handleChanges, sheetCodeName, updates);
-    setTimeout(() => {
-      // This will run scheduledFunction after 10 seconds
-      handleChangeCaller(updates, sheetCodeName);
-    }, 1000);
-  }
-  for(let sheet in handleChanges) {
-    handleChange(handleChanges[sheet], sheet);
-  }
-  for(let wb in handleChanges) {
-    for(let sheet in handleChanges[wb]) {
-      handleChange(handleChanges[wb][sheet], wb, sheet);
-    }
-  }
+  // oldValues.splice(indOldValues, oldValues.length - 1 - indOldValues);
+  // oldValues.push(values);
+  // if(oldVersionsMaxNb < oldValues.length) {
+  //   oldValues.shift();
+  // }
 }
 
 function getAddress(i, j) {
   return getColumnTag(j) + ":" + (i + 1);
 }
 
-function checkBrack(i, j, k, val, columnTitle) {
+function checkBrack(values, i, j, k, val, columnTitle) {
   val = val.toLowerCase();
   let isAtt = -2;
   if(columnTitle !== undefined) {
@@ -343,7 +313,7 @@ function checkBrack(i, j, k, val, columnTitle) {
       }
     }
     if(columnInd == -1) {
-      inconsist_removing_elem(i, j, k, `No attribute column named "${columnTitle}" at ${getAddress(i, j)}.`)
+      inconsist_removing_elem(values, i, j, k, `No attribute column named "${columnTitle}" at ${getAddress(i, j)}.`)
       return -1;
     }
     for(let m = 0; m < attNames[columnInd].length; m++) {
@@ -353,7 +323,7 @@ function checkBrack(i, j, k, val, columnTitle) {
       }
     }
     if(isAtt == -2) {
-      inconsist_replacing_elem(i, j, k, `The column named "${columnTitle}" at ${getAddress(i, j)} doesn't have the attribute "${val}".`)
+      inconsist_replacing_elem(values, i, j, k, `The column named "${columnTitle}" at ${getAddress(i, j)} doesn't have the attribute "${val}".`)
       return -1;
     }
   } else {
@@ -361,7 +331,7 @@ function checkBrack(i, j, k, val, columnTitle) {
       for(let m = 0; m < attNames[key].length; m++) {
         if(attNames[key][m] == val) {
           if(isAtt != -2) {
-            inconsist_replacing_elem(i, nameInd, k, findNewName(val, false), `The attribute at ${getAddress(i, nameInd)} exists in multiple columns.`);
+            inconsist_replacing_elem(values, i, nameInd, k, findNewName(values, val, false), `The attribute at ${getAddress(i, nameInd)} exists in multiple columns.`);
             return -1;
           }
           isAtt = m;
@@ -373,14 +343,14 @@ function checkBrack(i, j, k, val, columnTitle) {
   return isAtt;
 }
 
-function initializeData() {
+function initializeData(values) {
   for (let i = 1; i < nbLineBef; i++) {
     data.push({attributes: new Set(), posteriors: [], ulteriors: [], nbPost: 0, minDist: 0, maxDist: Infinity});
     // check if a non-empty row has no name
     if(!values[i][nameInd].length) {
       for (let j = 0; j < values[i].length; j++) {
         if (values[i][j].length !== 0) {
-          inconsist(i, nameInd, `missing name at ${getAddress(i, nameInd)}`, [[findNewName("")]]);
+          inconsist(i, nameInd, `missing name at ${getAddress(i, nameInd)}`, [[findNewName(values, "")]]);
           return -1;
         }
       }
@@ -390,12 +360,12 @@ function initializeData() {
   }
 }
 
-function getAttributes(sheetCodeName) {
+function getAttributes(values, sheetCodeName) {
   // attributes
   let accAttr = {};
   let acc = 0;
   for (let j = 0; j < colNumb; j++) {
-    let colTitle = values0[sheetCodeName][0][j];
+    let colTitle = values0Glob[sheetCodeName][0][j];
     if(colTitle !== null){
       try{
         colTitle = colTitle.split(";");
@@ -407,7 +377,7 @@ function getAttributes(sheetCodeName) {
     }
     for(let k = 0; k < colTitle.length; k++) {
       if(colTitle[k].match(/^[A-Z]+$/)) {
-        inconsist_replacing_elem(0, j, k, findNewName(colTitle[k]), `Column name at ${getAddress(0, j)} is only upper case letters.`);
+        inconsist_replacing_elem(values, 0, j, k, findNewName(values, colTitle[k]), `Column name at ${getAddress(0, j)} is only upper case letters.`);
         return -1;
       }
     }
@@ -440,7 +410,7 @@ function getAttributes(sheetCodeName) {
   }
 }
 
-function getNames() {
+function getNames(values) {
   allMediaRows = [];
   for(let i = 1; i < nbLineBef; i++) {
     let valuesI = values[i][nameInd];
@@ -450,7 +420,7 @@ function getNames() {
       let match = regexName.exec(val);
       let refInd_val;
       if(match !== null) {
-        refInd_val = checkBrack(i, nameInd, k, match.groups.val, match.groups.columnTitle);
+        refInd_val = checkBrack(values, i, nameInd, k, match.groups.val, match.groups.columnTitle);
         if(refInd_val == -1) {
           return -1;
         }
@@ -461,7 +431,7 @@ function getNames() {
         for (let r = 1; r <= i; r++) {
           for (let f = 0; f < values[r][nameInd].length; f++) {
             if ((r < i || f < k) && valuesI[k]==values[r][nameInd][k]) {
-              inconsist_replacing_elem(i, nameInd, k, findNewName(valuesI[k]), `name "${valuesI[k]}" at ${getAddress(i, nameInd)} already at ${getAddress(r, nameInd)}`);
+              inconsist_replacing_elem(values, i, nameInd, k, findNewName(values, valuesI[k]), `name "${valuesI[k]}" at ${getAddress(i, nameInd)} already at ${getAddress(r, nameInd)}`);
               return -1;
             }
           }
@@ -469,7 +439,7 @@ function getNames() {
       } else {
         attrOfAttr[refInd_val] = data[i].attributes;
         if(data[i].isAtt !== undefined && data[i].isAtt !== refInd_val) {
-          inconsist_removing_elem(i, nameInd, k, `attribute "${val}" at ${getAddress(i, nameInd)} is already linked to another name.`);
+          inconsist_removing_elem(values, i, nameInd, k, `attribute "${val}" at ${getAddress(i, nameInd)} is already linked to another name.`);
           return -1;
         }
         data[i].isAtt = refInd_val;
@@ -509,7 +479,7 @@ function setAllAttr() {
   }
 }
 
-function addFormula(i, formula) {
+function addFormula(values, i, formula) {
   for (let j = 0; j < colNumb; j++) {
     if (columnTypes[j] == allColumnTypes.CONDITIONS) {
       let colPattern = values[0][j];
@@ -517,7 +487,7 @@ function addFormula(i, formula) {
         colPattern = colPattern[0].split("?!");
       }
       if (values[i][j].length + (colPattern.length?1:-1) > colPattern.length) {
-        inconsist_removing_elem(i, j, k, `Too much arguments at ${getAddress(i, j)}.`);
+        inconsist_removing_elem(values, i, j, k, `Too much arguments at ${getAddress(i, j)}.`);
         return -1;
       }
       if(values[i][j].length) {
@@ -531,13 +501,13 @@ function addFormula(i, formula) {
   }
 }
 
-async function getConditions(sheetCodeName) {
+async function getConditions(values, sheetCodeName) {
   let optConds = false;
   for(const i of allMediaRows) {
     let formula = [];
-    addFormula(i, formula);
+    addFormula(values, i, formula);
     for (let a of data[i].attributes) {
-      addFormula(a, formula);
+      addFormula(values, a, formula);
     }
     formula = formula.join(" && ");
     let replacedWithWords;
@@ -574,7 +544,7 @@ async function getConditions(sheetCodeName) {
           continue;
         }
         if(groups.attrib_ref !== undefined) {
-          let refInd_val = checkBrack(i, 0, 0, groups.attrib_ref, groups.attrib_ref_col);
+          let refInd_val = checkBrack(values, i, 0, 0, groups.attrib_ref, groups.attrib_ref_col);
           if(refInd_val == -1) {
             return -1;
           }
@@ -584,7 +554,7 @@ async function getConditions(sheetCodeName) {
           }
           groups.attrib_ref = refInd_val;
         }
-        let refInd_val = checkBrack(i, 0, 0, groups.precedent, groups.precedent_col);
+        let refInd_val = checkBrack(values, i, 0, 0, groups.precedent, groups.precedent_col);
         if(refInd_val == -1) {
           return -1;
         }
@@ -733,18 +703,18 @@ async function check(sheetCodeName) {
   resolved[sheetCodeName] = false;
   
   data = [-1];
-
-  if(initializeData() == -1) {
+  let values = valuesGlob[sheetCodeName];
+  if(initializeData(values) == -1) {
     return -1;
   }
   stop = false;
   attributes = [];
 
-  if(getAttributes(sheetCodeName) == -1) {
+  if(getAttributes(values, sheetCodeName) == -1) {
     return -1;
   }
 
-  if(getNames() == -1) {
+  if(getNames(values) == -1) {
     return -1;
   }
 
@@ -752,789 +722,10 @@ async function check(sheetCodeName) {
     return -1;
   }
 
-  await getConditions(sheetCodeName);
+  await getConditions(values, sheetCodeName);
 }
 
-
-
-
-
-
-
-
-
-
-
-
-function check0() {
-  for (let i = 1; i < nbLineBef; i++) {
-    for (let j = 1; j < 4; j++) {
-      for (let k = 0; k < values[i][j].length; k++) {
-
-        //if [category]name is in the follow column
-        let isCatF = 0;
-        if (j == 1 && elem.startsWith("[")) {
-          let endPar = elem.indexOf("]");
-          if (endPar != -1) {
-            let cat = val.slice(1, endPar);
-            var catId = 0;
-            for (let n = 0; n < colNumb - 4; n++) {
-              for (let r = 0; r < attNames[n].length; r++) {
-                if (attNames[n][r] == cat) {
-                  stop = true;
-                  break;
-                }
-                catId++;
-              }
-              if (stop) {
-                break;
-              }
-            }
-            if (!stop) {
-              suggRef(i, j, k);
-              return -1;
-            }
-            stop = false;
-            val = val.slice(endPar + 1);
-            isCatF = 1;
-          }
-        }
-
-        //search for the line of the name
-        for (var r = 1; r < values.length; r++) {
-          for (let f = 0; f < values[r][0].length; f++) {
-            if (searching(r, 0, f)) {
-              stop = true;
-              break;
-            }
-          }
-          if (stop) {
-            break;
-          }
-        }
-        if (!stop) {
-          suggRef(i, j, k);
-          return -1;
-        }
-        stop = false;
-        if (stat > 0) {
-          if (found(r, i, j, k) == -1) {
-            return -1;
-          }
-          if(periods) {
-            console.log(`2periods : ${periods[0][0]}`)
-          }
-        }
-        if (isCatF) {
-          if (data[r][4].some((v) => v[1] == catId)) {
-            suggRef(i, j, k);
-            return -1;
-          }
-          data[i][1].push(r);
-          data[r][4].push([i, catId]);
-          continue;
-        }
-        perIntCont[i][j - 1].push([r, stat]);
-        values[i][j][k] = perNot[stat] + elem2;
-      }
-    }
-  }
-  console.log(" hhhhhhhhh ")
-  for (let i = 0; i < periods.length; i++) {
-    for (let q = 1; q < 3; q++) {
-      if (periods[i][q] != -1) {
-        continue;
-      }
-      periods[i][q] = values.length;
-      values.push([]);
-      perRef.push(i);
-      for (let i = 0; i < colNumb; i++) {
-        values[values.length - 1].push([]);
-      }
-      for (let m = 0; m < periods[i][3].length; m++) {
-        values[values.length - 1][0].push(perNot[q] + periods[i][3][m]);
-      }
-      data.push([[], [], [], -1, []]);
-    }
-    for (let q = 1; q < 3; q++) {
-      values[periods[i][q]][0] = periods[i][3]
-        .map((e) => perNot[q] + e)
-        .concat(values[periods[i][q]][0].filter((e) => !e.startsWith(perNot[q])));
-    }
-
-    //fill start and end with the info on the declaration line
-    let z = periods[i][1];
-    let s = periods[i][2];
-    data[s][1].push(z);
-    let c = periods[i][0];
-    if (c == -1) {
-      c = values.length;
-      periods[i][0] = c;
-      values.push([]);
-      for (let i = 0; i < colNumb; i++) {
-        values[c].push([]);
-      }
-      for (let m = 0; m < periods[i][3].length; m++) {
-        values[c][0].push(periods[i][3][m]);
-      }
-      data.push([[], [], [], z, [], []]);
-      data[z][0].push();
-      continue;
-    }
-    data[z][0] = false;
-    data[c][3] = z;
-  }
-  for (let i = 1; i < nbLineBef; i++) {
-    for (let j = 0; j < perInt[i].length; j++) {
-      if (perRef[i] > -1) {
-        data[periods[perRef[i]][0]][1].push(periods[perInt[i][j]][1]);
-        data[periods[perInt[i][j]][2]][1].push(periods[perRef[i]][2]);
-      } else {
-        data[i][1].push(periods[perInt[i][j]][1]);
-        data[periods[perInt[i][j]][2]][1].push(i);
-      }
-    }
-  }
-  for (let i = 1; i < nbLineBef; i++) {
-    for (let j = 0; j < 3; j++) {
-      for (let k = 0; k < perIntCont[i][j].length; k++) {
-        let u = perIntCont[i][j][k];
-        let r = u[0];
-        let e = r;
-        let iR = r;
-        if (perRef[r] > -1) {
-          var y = periods[perRef[r]];
-          r = y[1];
-          e = y[2];
-          iR = e;
-        }
-        if (u[1] == 1) {
-          e = r;
-          iR = y[0];
-        } else if (u[1] == 2) {
-          r = e;
-        }
-        perIntCont[i][j][k] = [r, e, u[1], iR];
-        console.log(`perIntCont : ${i} ${j} ${k} ${r} ${e} ${u[1]} ${iR}`)
-      }
-    }
-  }
-  console.log(" qqqqqqqqqqqqq ")
-  for (let i = 1; i < nbLineBef; i++) {
-    if (perIntCont[i][0].length > 1) {
-      let interm = [];
-      let isIn = [];
-      for (let j = 0; j < perIntCont[i][0].length; j++) {
-        isIn.push(0);
-      }
-      for (let p = 0; p < isIn.length - 1; p++) {
-        if (!isIn[p]) {
-          for (let j = 0; j < isIn.length; j++) {
-            console.log(`data[perIntCont[i][0][j][3]] : ${data[perIntCont[i][0][j][3]]}`)
-            for (let k = 0; k < data[perIntCont[i][0][j][3]][1].length; k++) {
-              for (let m = 0; m < isIn.length; m++) {
-                if (j != m && k == perIntCont[i][0][m][3]) {
-                  if (!isIn[m]) {
-                    stop = true;
-                    break;
-                  }
-                }
-              }
-              if (stop) {
-                break;
-              }
-            }
-            if (stop) {
-              interm.push(perIntCont[i][0][j]);
-              isIn[j] = 1;
-              break;
-            }
-          }
-          if (!stop) {
-            for (let j = 0; j < isIn.length; j++) {
-              if (!isIn[j]) {
-                interm.push(perIntCont[i][0][j]);
-                isIn[j] = 1;
-              }
-            }
-          }
-        }
-      }
-      console.log(`interm.length : ${interm.length}`)
-      for (let j = 0; j < isIn.length; j++) {
-        console.log(`j : ${j}`)
-        console.log(`interm[j] : ${interm[j]}`)
-        perIntCont[i][0][isIn.length - 1 - j] = interm[j].slice();
-      }
-    }
-  }
-  console.log(" aaaaaaaaaaa ")
-  for (let i = 1; i < nbLineBef; i++) {
-    for (let j = 0; j < 3; j++) {
-      for (let k = 0; k < perIntCont[i][j].length; k++) {
-        let u = perIntCont[i][j][k];
-        let r = u[0];
-        let e = u[1];
-        let ie = i;
-        let iR = i;
-        if (perRef[i] > -1) {
-          let p = periods[perRef[i]]
-          if (i == p[1]) {
-            iR = p[0];
-          } else if (i == p[0]) {
-            ie = p[2];
-          }
-        }
-        if (j == 0) {
-          while (data[e][3] != -1) {
-            e = data[e][3];
-          }
-          let firstRed = 1;
-          while (!data[iR][0]) {
-            console.log(`iR : ${iR}`);
-            if (perRef[e] > -1) {
-              //set follow rule to followed lines
-              var ki = k - 1;
-              if (firstRed) {
-                firstRed = 0;
-              } else {
-                ki = perIntCont[iR][0].length - 1;
-              }
-              if (ki < 0) {
-                iR = periods[perRef[iR]][0];
-              } else {
-                iR = perIntCont[iR][0][ki][3];
-              }
-            } else {
-              values[iR][1].splice(1, values[iR][1].length - 1);
-              console.log("sugg3");
-              sugg(iR, 1);
-              return -1;
-            }
-          }
-          data[e][3] = iR;
-          data[iR][0] = false;
-        } else if (j == 1) {
-          data[iR][1].push(e);
-        } else {
-          data[r][1].push(ie);
-        }
-      }
-    }
-  }
-
-  // --search inconcistencies--
-
-  let inLoop = [false];
-  let follower = [0];
-  for (let i = 1; i < data.length; i++) {
-    if (data[i] === 0) {
-      inLoop.push(false);
-    } else {
-      inLoop.push(true);
-    }
-    follower.push(0);
-  }
-  //group lines by followings
-  lenAgg = 0;
-  dataAgg = [];
-  for (let i = 1; i < data.length; i++) {
-    try {
-      if (!data[i][0] || values[i][0].length == 0) {
-        1;
-      }
-    } catch (error) {
-      1;
-    }
-    if (!data[i][0] || values[i][0].length == 0) {
-      continue;
-    }
-    dataAgg.push({
-      lines: [],
-      before: new Set(),
-      after: new Set(),
-      shortBefore: [],
-      shortAfter: [],
-      attr: [],
-      catFollowed: [],
-      catFollows: [],
-      mediaNb: 0
-    });
-    let j = i;
-    let lenLines = 0;
-    let mediaNb = 0;
-    while (j !== -1) {
-      dataAgg[lenAgg].lines.push(j);
-      for (let k = 0; k < data[j][2].length; k++) {
-        for (var h = 0; h < dataAgg[lenAgg].attr.length; h++) {
-          if (dataAgg[lenAgg].attr[h][0] == data[j][2][k]) {
-            dataAgg[lenAgg].attr[h][2] = mediaNb + 1;
-            dataAgg[lenAgg].attr[h][3]++;
-            dataAgg[lenAgg].attr[h].push(mediaNb);
-            stop = true;
-            break;
-          }
-        }
-        if (!stop) {
-          h = dataAgg[lenAgg].attr.length;
-          dataAgg[lenAgg].attr.push([data[j][2][k], mediaNb, mediaNb + 1, 1, mediaNb]);
-        }
-        if (dataAgg[lenAgg].attr[h][3] == attributes[data[j][2][k]]) {
-          let sum = 0;
-          for (let m = 4; m < dataAgg[lenAgg].attr[h].length; m++) {
-            sum += dataAgg[lenAgg].attr[h][m];
-          }
-          attributes[data[j][2][k]] = -Math.floor(sum / (dataAgg[lenAgg].attr[h].length - 4));
-        }
-        stop = false;
-      }
-      if (!inLoop[j]) {
-        let j0 = follower[j];
-        let j2 = dataAgg[lenAgg].lines[lenLines];
-        inconsist(
-          values[j0][0][0],
-          0,
-          "Lines " +
-          values[j0][0][0] +
-          " (" +
-          (j0 + 1) +
-          ")" +
-          " and " +
-          values[j2][0][0] +
-          " (" +
-          (j2 + 1) +
-          ")" +
-          " both follow line " +
-          j,
-          []
-        );
-        return -1;
-      }
-      inLoop[j] = false;
-      follower[j] = dataAgg[lenAgg].lines[lenLines];
-      lenLines++;
-      if (j < nbLineBef && perRef[j] == -1) {
-        mediaNb++;
-      }
-      j = data[j][3];
-    }
-    dataAgg[lenAgg].mediaNb = mediaNb;
-    lenAgg++;
-  }
-  //check if there is a loop that couldn't have been entered
-  for (let i = 1; i < data.length; i++) {
-    if (values[i][0].length == 0 || !inLoop[i]) {
-      continue;
-    }
-    let j = i;
-    let allLines = "";
-    while (1) {
-      let index = j + 1;
-      if (j >= nbLineBef) {
-        index = "out";
-      }
-      allLines += values[j][0][0] + "(" + index + ") >> ";
-      if (j == i) {
-        break;
-      }
-      j = data[j][3];
-    }
-    inconsist(values[i][0][0], 0, allLines, []);
-    return -1;
-  }
-  console.log("oooooooooooooooooo")
-  //add the precedents to dataAgg
-  console.log(`steps`);
-  place = [];
-  steps = [];
-  visited = [];
-  let inPath = [];
-  for (let i = 0; i < lenAgg; i++) {
-    place.push([]);
-    steps.push(0);
-    inPath.push(0);
-    visited.push(0);
-    for (let k = 0; k < dataAgg[i].lines.length; k++) {
-      let f = dataAgg[i].lines[k];
-      for (let h = 0; h < data[f][1].length; h++) {
-        for (let m = 0; m < lenAgg; m++) {
-          let ind = dataAgg[m].lines.indexOf(data[f][1][h]);
-          if (ind != -1) {
-            if (i == m) {
-              if (k <= ind) {
-                let allLines = "";
-                for (let v = k; v < ind + 1; v++) {
-                  let vi = dataAgg[i].lines[v];
-                  let index = vi + 1;
-                  if (vi >= nbLineBef) {
-                    index = "out";
-                  }
-                  allLines += "\n>> " + values[vi][0][0] + "(" + index + ")";
-                }
-                let vi = dataAgg[i].lines[k];
-                let index = vi + 1;
-                if (vi >= nbLineBef) {
-                  index = "out";
-                }
-                inconsist(
-                  dataAgg[i].lines[k],
-                  0,
-                  "   " + allLines.slice(4) + "\n > " + values[vi][0][0] + "(" + index + ")",
-                  []
-                );
-                return -1;
-              }
-            } else {
-              dataAgg[i].after.add(m);
-              dataAgg[m].before.add(i);
-              if (dataAgg[i].lines[0] == 155) {
-                console.log(`add after ${dataAgg[m].lines[0]}`);
-              }
-            }
-            break;
-          }
-        }
-      }
-      for (let h = 0; h < data[f][4].length; h++) {
-        let cat = data[f][4][h];
-        let ri = cat[0];
-        cat = cat[1];
-        for (let m = 0; m < lenAgg; m++) {
-          let ind = dataAgg[m].lines.indexOf(ri);
-          if (ind != -1) {
-            if (i == m) {
-              for (let r = ind + 1; r < k; r++) {
-                if (data[dataAgg[i].lines[r]][2].includes(cat)) {
-                  let allLines = "";
-                  for (let v = int; v < r + 1; v++) {
-                    let vi = dataAgg[i].lines[v];
-                    let index = vi + 1;
-                    if (vi >= nbLineBef) {
-                      index = "out";
-                    }
-                    allLines += "\n >> (" + index + ")" + values[vi][0][0];
-                  }
-                  inconsist(dataAgg[i].lines[int], 0, "[" + cat + "]\n    " + allLines.slice(5), []);
-                  return -1;
-                }
-              }
-            }
-            dataAgg[m].catFollows.push(cat);
-            dataAgg[i].catFollowed.push([cat, m]);
-            break;
-          }
-        }
-      }
-    }
-  }
-  console.log("zzzzzzzzzzzzzzzzzzzzzzzzzzz")
-  for (let i = 0; i < lenAgg; i++) {
-    if (dataAgg[i].mediaNb == 0) {
-      dataAgg[i].mediaNb =
-        dataAgg[i].mediaNb > 0 || dataAgg[i].catFollows.size || dataAgg[i].catFollowed.size ? -1 : 0;
-    }
-  }
-
-  let mi;
-  let arrow;
-  let inc;
-  let stack = [];
-
-  // return;
-  for (let objectId = 0; objectId < lenAgg; objectId++) {
-    if (dataAgg[objectId].after.size == 0) {
-      if (!visited[objectId]) {
-        let path = [];
-        stack.push(objectId);
-        while (stack.length > 0) {
-          let back = 0;
-          let hasUnvisitedNeighbor = 0;
-          const current = stack[stack.length - 1];
-          if (path.length != 0 && path[path.length - 1] == current) {
-            back = 1;
-          } else {
-            path.push(current);
-            inPath[current] = 1;
-            visited[current] = 1;
-            const neighbors = Array.from(dataAgg[current].before);
-            for (const neighbor of neighbors) {
-              if (inPath[neighbor]) {
-                let allLines = "";
-                let last = -1;
-                path.splice(0, path.indexOf(neighbor));
-                path.push(neighbor);
-                path.push(path[Math.min(1, path.length - 1)]);
-                for (let i = 0; i < path.length - 1; i++) {
-                  for (let ji = 0; ji < dataAgg[path[i + 1]].lines.length; ji++) {
-                    let j = dataAgg[path[i + 1]].lines[ji];
-                    for (const k of data[j][1]) {
-                      for (let m = 0; m < dataAgg[path[i]].lines.length; m++) {
-                        let mo = dataAgg[path[i]].lines[m];
-                        if (mo == k && (path.length > 3 || j < m)) {
-                          let sub = "";
-                          let toAdd = [mo, j];
-                          if (last != -1) {
-                            toAdd = [j];
-                            if (last < m) {
-                              arrow = ">>";
-                              inc = 1;
-                            } else {
-                              arrow = "<<";
-                              inc = -1;
-                            }
-                            for (let n = last + 1; n < m + 1; n += inc) {
-                              let no = dataAgg[path[i]].lines[n];
-                              mi = no + 1;
-                              if (mi > nbLineBef) {
-                                mi = "out";
-                              }
-                              sub += "\n" + arrow + " (" + mi + ") " + values[no][0].join("; ");
-                            }
-                            allLines += sub;
-                          }
-                          if (i < path.length - 2) {
-                            last = ji;
-                            for (const a of toAdd) {
-                              mi = a + 1;
-                              if (a > nbLineBef) {
-                                mi = "out";
-                              }
-                              allLines += "\n>  (" + mi + ") " + values[a][0].join("; ");
-                            }
-                          }
-                          stop = 1;
-                          break;
-                        }
-                      }
-                      if (stop) {
-                        break;
-                      }
-                    }
-                    if (stop) {
-                      stop = 0;
-                      break;
-                    }
-                  }
-                }
-                inconsist(dataAgg[path[1]].lines[0], 0, "   " + allLines.slice(3), []);
-                return -1;
-              }
-              if (steps[neighbor]) {
-                // if there is a link that can be removed
-                let lvl = place[neighbor][0];
-                dataAgg[neighbor].after.delete(lvl);
-                dataAgg[lvl].before.delete(neighbor);
-                if (dataAgg[lvl].mediaNb != 0) {
-                  dataAgg[neighbor].shortAfter.splice(dataAgg[neighbor].shortAfter.indexOf(lvl), 1);
-                } else {
-                  dataAgg[lvl].shortAfter.forEach((v) => {
-                    dataAgg[neighbor].shortAfter.splice(dataAgg[neighbor].shortAfter.indexOf(v), 1);
-                  });
-                }
-                if (dataAgg[neighbor].mediaNb != 0) {
-                  dataAgg[lvl].shortBefore.splice(dataAgg[lvl].shortBefore.indexOf(neighbor), 1);
-                } else {
-                  dataAgg[neighbor].shortBefore.forEach((v) => {
-                    dataAgg[lvl].shortBefore.splice(dataAgg[lvl].shortBefore.indexOf(v), 1);
-                    if (dataAgg[lvl].mediaNb != 0) {
-                      dataAgg[v].shortAfter.splice(dataAgg[v].shortAfter.indexOf(lvl), 1);
-                    } else {
-                      dataAgg[lvl].shortAfter.forEach(v2 => {
-                        dataAgg[v].shortAfter.splice(dataAgg[v].shortAfter.indexOf(v2), 1);
-                      });
-                    }
-                  });
-                }
-                if (place[neighbor][1] < stack.length && stack[place[neighbor][1]] == neighbor) {
-                  stack.splice(place[neighbor][1], 1);
-                }
-              } else {
-                steps[neighbor] = 1;
-              }
-              if (visited[neighbor]) {
-                if (dataAgg[neighbor].mediaNb != 0) {
-                  dataAgg[current].shortBefore.push(neighbor);
-                } else {
-                  dataAgg[neighbor].shortBefore.forEach((v) => {
-                    dataAgg[current].shortBefore.push(v);
-                    if (dataAgg[current].mediaNb != 0) {
-                      dataAgg[v].shortAfter.push(current);
-                    } else {
-                      dataAgg[current].shortAfter.forEach((v2) => {
-                        dataAgg[v].shortAfter.push(v2);
-                      });
-                    }
-                  });
-                }
-              } else {
-                stack.push(neighbor);
-                hasUnvisitedNeighbor = 1;
-              }
-              place[neighbor] = [current, stack.length];
-              if (dataAgg[current].mediaNb != 0) {
-                dataAgg[neighbor].shortAfter.push(current);
-              } else {
-                dataAgg[current].shortAfter.forEach((v) => {
-                  dataAgg[neighbor].shortAfter.push(v);
-                });
-              }
-            }
-          }
-          if (back || !hasUnvisitedNeighbor) {
-            inPath[path[path.length - 1]] = 0;
-            path.pop();
-            if (path.length != 0) {
-              if (dataAgg[current].mediaNb != 0) {
-                dataAgg[path[path.length - 1]].shortBefore.push(current);
-              } else {
-                dataAgg[current].shortBefore.forEach((v) => {
-                  dataAgg[path[path.length - 1]].shortBefore.push(v);
-                });
-              }
-            }
-            for (const neighbor of Array.from(dataAgg[current].before)) {
-              steps[neighbor] = 0;
-            }
-            stack.pop();
-          }
-        }
-      }
-    }
-  }
-
-  console.log(`color loading...`);
-
-  // Loop through each row in the range
-  let maxL = Math.max(nbLineBef, prevLine[sheetCodeName]);
-  let prevLineBef = prevLine[sheetCodeName];
-  prevLine[sheetCodeName] = 1;
-
-  let color, font;
-  for(let j = colors.length; j<=maxL; j++) {
-    colors.push("");
-    fonts.push("");
-  }
-  for (let i = 0; i < maxL; i++) {
-    if (!i) {
-      color = "000000";
-      font = "ffffff";
-    } else {
-      font = "000000";
-      color = "";
-      if (i < nbLineBef) {
-        if (perRef[i] > -1) {
-          color = "d97373";
-          if (periods[perRef[i]][0] == i) {
-            color = "ffa600";
-          } else if (periods[perRef[i]][1] == i) {
-            color = "93ff00";
-          }
-        } else if (perRef[i] == -2) {
-          color = "73d9cb";
-        }
-      }
-    }
-    if(color || font!="000000") {
-      prevLine[sheetCodeName] = i + 1;
-    }
-    if(colors[i]!=color || fonts[i]!=font || updateRegularity) {
-      response.push({ "range_updateRegularity": [i + 1, colNumb-1] });
-      if(colors[i]!=color || updateRegularity) {
-        if(color) {
-          response.push({ "color_updateRegularity": [color] });
-        } else {
-          response.push({ "clear_updateRegularity": [] });
-        }
-      }
-      if(fonts[i]!=font || updateRegularity) {
-        response.push({ "font_updateRegularity": [font] });
-      }
-      colors[i]=color
-      fonts[i]=font
-    }
-  }
-  iL = Math.min(prevLine[sheetCodeName], prevLineBef);
-  iU = Math.max(prevLine[sheetCodeName], prevLineBef);
-  for(let i = iL; i<iU; i++) {
-    response.push({ "styleBorders": [i, 0, colNumb, iL == prevLineBef] });
-  }
-  response.push({ "checkSuccess": [] });
-  resolved[sheetCodeName] = true;
-  handleSelectLinks();
-}
-
-function suggRef(i, j, k) {
-  let suggWords = [];
-  let suggWords2 = [];
-  for (let r = 1; r < nbLineBef; r++) {
-    if (perRef[r] > -1 && periods[perRef[r]][0] != r) {
-      continue;
-    }
-    for (let f = 0; f < values[r][0].length; f++) {
-      let val2 = values[r][0][f];
-      if (val2.includes(val)) {
-        suggWords.push(val2);
-      } else if (val.includes(val2)) {
-        suggWords2.push(val2);
-      }
-    }
-  }
-  suggWords.sort(function (a, b) {
-    return a.indexOf(val) - b.indexOf(val);
-  });
-  suggWords2.sort(function (a, b) {
-    return val.indexOf(a) - val.indexOf(b);
-  });
-  suggWords = suggWords.concat(suggWords2).map((v) =>
-    values[i][j]
-      .slice(0, k)
-      .concat([perNot[stat] + v])
-      .concat(values[i][j].slice(k + 1))
-      .join("; ")
-  );
-  if (suggWords.length == 0) {
-    values[i][j].splice(k, 1);
-    console.log("sugg4");
-    sugg(i, j);
-  } else {
-    console.log("suggRef");
-    suggSet(i, j, suggWords);
-  }
-}
-
-function found(r, i, j, k) {
-  if (perRef[r] == -1) {
-    values[i][j].splice(k, 1);
-    sugg(i, j);
-    return -1;
-  }
-  if (perRef[r] == -2) {
-    perRef[r] = periods.length;
-    periods.push([
-      -1,
-      -1,
-      -1,
-      values[r][0].filter((e) => e.startsWith(perNot[stat2])).map((e) => e.slice(perNot[stat2].length))
-    ]);
-    periods[perRef[r]][stat2] = r;
-  }
-  if (j == 0) {
-    periods[perRef[r]][stat] = i;
-    periods[perRef[r]][3] = periods[perRef[r]][3].concat(
-      values[i][0]
-        .filter((e) => e.startsWith(perNot[stat]))
-        .map((e) => e.slice(perNot[stat].length))
-        .filter((e) => !periods[perRef[r]][3].map((e) => e.toLowerCase()).includes(e.toLowerCase()))
-    );
-    perRef[i] = perRef[r];
-  }
-  if (i != r) {
-    values[i][j][k] = perNot[stat] + elem2;
-  }
-  return 1;
-}
-
-function searching(r, d, f) {
+function searching(values, r, d, f) {
   elem2 = values[r][d][f];
   val2 = elem2.toLowerCase();
   let stop2 = true;
@@ -1557,21 +748,12 @@ function searching(r, d, f) {
   return stop2;
 }
 
-function inconsist_removing_elem(i, j, k, message) {
+function inconsist_removing_elem(values, i, j, k, message) {
   inconsist(i, j, message, [values[i][j].filter((_, m) => m !== k)]);
 }
 
-function inconsist_replacing_elem(i, j, k, newElement, message) {
+function inconsist_replacing_elem(values, i, j, k, newElement, message) {
   inconsist(i, j, message, [values[i][j].map((item, m) => (m === k ? newElement : item))]);
-}
-
-function sugg(i, j) {
-  suggSet(i, j, [values[i][j]]);
-}
-
-function suggSet(i, j, sugg) {
-  let cellAddress = `${getColumnTag(j)}${i + 1}`;
-  inconsist(i, j, "Error at " + cellAddress, sugg);
 }
 
 function midToWhite(theMsgType = msgType.ERROR) {
@@ -1584,7 +766,7 @@ function midToWhite(theMsgType = msgType.ERROR) {
   return {r:newR, g:newG, b:newB};
 }
 
-function displayReference(row) {
+function displayReference(values, row) {
   response[0]["listBoxList"][msgType.RELATIVES].push({color: msgTypeColors[msgType.RELATIVES], msg: "; ".join(values[r][0]), actions: [{action: Actions.Select, address: [row, 0]}]});
 }
 
@@ -1599,7 +781,7 @@ function inconsist(i, j, message, suggs, theAction = Actions.NewVal) {
   });
 }
 
-function findNewName(name, checked = true) {
+function findNewName(values, name, checked = true) {
   let alreadyExist = true;
   while (alreadyExist) {
     if(checked) {
@@ -1638,12 +820,12 @@ function findNewName(name, checked = true) {
   return name;
 }
 
-function correct(sheetCodeName) {
+function correct(values, sheetCodeName) {
   for (let i = 1; i < nbLineBef; i++) {
     for (let j = 0; j < colNumb; j++) {
       let value = values[i][j].join("; ");
-      if (values0[sheetCodeName][i][j] != value) {
-        values0[sheetCodeName][i][j] = value;
+      if (values0Glob[sheetCodeName][i][j] != value) {
+        values0Glob[sheetCodeName][i][j] = value;
         response.push({ "chgValue": [i + 1, j + 1, value] });
       }
     }
@@ -1660,12 +842,11 @@ function customSort(a, b) {
   }
 }
 
-function dataGeneratorSub(sheetCodeName) {
+function dataGeneratorSub(values, sheetCodeName) {
   if (!resolved[sheetCodeName]) {
     return -1;
   }
-
-  correct(sheetCodeName);
+  correct(values, sheetCodeName);
   
   // Example data to pass to the C program
   let dataJson = [
@@ -1707,15 +888,23 @@ function dataGeneratorSub(sheetCodeName) {
 
   
   const programPath = "C:/Users/abarb/Documents/health/news_underground/mediaSorter/programs/c_prog/mediaSorter/x64/Release/mediaSorter.exe";
+
+  let dataFolder = `C:/Users/abarb/Documents/health/news_underground/mediaSorter/programs/data/${sheetCodeName}`;
+  
+  // check if the folder exists, if not create it
+  if (!fs.existsSync(dataFolder)) {
+    fs.mkdirSync(dataFolder, { recursive: true });
+  }
+
   
   
   // Convert the object to JSON and write it to a file
-  fs.writeFile('C:/Users/abarb/Documents/health/news_underground/mediaSorter/programs/data/data.json', JSON.stringify(data, null, 2), (err) => {
+  fs.writeFile(dataFolder + `/data.json`, JSON.stringify(data, null, 2), (err) => {
     if (err) throw err;
     console.log('Data has been written to data.json');
   });
 
-  exec(programPath, (error, stdout, stderr) => {
+  exec(`${programPath} ${sheetCodeName}`, (error, stdout, stderr) => {
     if (error) {
       console.error(`Error executing program: ${error}`);
       return;
@@ -1727,119 +916,9 @@ function dataGeneratorSub(sheetCodeName) {
     // Output from the C program will be in stdout
     console.log(`Program output: ${stdout}`);
   });
-  return;
-
-
-  for (let i = 0; i < lenAgg; i++) {
-    steps[i] = 0;
-    visited[i] = 0;
-  }
-  for (let objectId = 0; objectId < lenAgg; objectId++) {
-    if (dataAgg[objectId].shortAfter.size == 0 && dataAgg[objectId].mediaNb != 0) {
-      if (!visited[objectId]) {
-        let path = [];
-        stack.push(objectId);
-        while (stack.length > 0) {
-          let back = 0;
-          let hasUnvisitedNeighbor = 0;
-          const current = stack[stack.length - 1];
-          if (path.length != 0 && path[path.length - 1] == current) {
-            back = 1;
-          } else {
-            path.push(current);
-            visited[current] = 1;
-            const neighbors = Array.from(dataAgg[current].shortBefore);
-            for (const neighbor of neighbors) {
-              if (steps[neighbor]) {
-                // if there is a link that can be removed
-                let lvl = place[neighbor][0];
-                dataAgg[neighbor].shortAfter.delete(lvl);
-                dataAgg[lvl].shortBefore.delete(neighbor);
-                if (place[neighbor][1] < stack.length && stack[place[neighbor][1]] == neighbor) {
-                  stack.splice(place[neighbor][1], 1);
-                }
-              } else {
-                steps[neighbor] = 1;
-              }
-              if (visited[neighbor]) {
-                dataAgg[current].shortBefore.push(neighbor);
-              } else {
-                stack.push(neighbor);
-                hasUnvisitedNeighbor = 1;
-              }
-              place[neighbor] = [current, stack.length];
-              dataAgg[neighbor].shortAfter.push(current);
-            }
-          }
-          if (back || !hasUnvisitedNeighbor) {
-            path.pop();
-            if (path.length != 0) {
-              dataAgg[path[path.length - 1]].shortBefore.push(current);
-            }
-            for (const neighbor of Array.from(dataAgg[current].shortBefore)) {
-              steps[neighbor] = 0;
-            }
-            stack.pop();
-          }
-        }
-      }
-    }
-  }
-
-  let dataAggCop = dataAgg.slice();
-  dataAgg.sort(customSort);
-  let sortedPositions = dataAggCop.map(function (obj) {
-    return dataAgg.indexOf(obj);
-  });
-  for (let i in dataAgg) {
-    if (dataAgg[i].lines[0] == 11) {
-      console.log(`ccl ${Array.from(dataAgg[i].before).join(",")}`);
-      console.log(
-        `ccl ${Array.from(dataAgg[i].before)
-          .map((val) => dataAgg[val].lines.join(","))
-          .join(" ")}`
-      );
-    }
-    dataAgg[i].before = new Set(Array.from(dataAgg[i].before).map((element) => sortedPositions[element]));
-    dataAgg[i].shortBefore = new Set(dataAgg[i].shortBefore.map((element) => sortedPositions[element]));
-    dataAgg[i].catFollowed = dataAgg[i].catFollowed.map((element) => {
-      console.log(`CATTTT ${element[1]} ${sortedPositions[element[1]]}`);
-      return [element[0], sortedPositions[element[1]]];
-    });
-  }
-  let result = attributes.join(",") + '\n' +
-    dataAgg
-      .map((row) =>
-        [
-          row.lines.join(";"),
-          new Set(row.shortAfter).size + ";" + row.after.size + ";" + row.mediaNb,
-          Array.from(row.shortBefore).join(";"),
-          Array.from(row.before).join(";"),
-          row.attr.map((row) => row.slice(0, 3).join(",")).join(";"),
-          row.catFollows.join(";"),
-          row.catFollowed.map((r) => r.join(",")).join(";")
-        ].join("\t")
-      ).join("\n") + '\n' +
-    values
-      .map((row) =>
-        row
-          .slice(0, colNumb)
-          .map(cell => cell.join("; "))
-          // .map(function (cell) {
-          //   if (Array.isArray(cell)) {
-          //     return cell.join("; ");
-          //   } else {
-          //     return cell;
-          //   }
-          // })
-          .join("\t")
-      ).join("\n");
-  response.push({ "sort": [result] });
-
-
 }
 
-async function renameSymbol(sheetCodeName, oldValue, newValue) {
+async function renameSymbol(values, sheetCodeName, oldValue, newValue) {
   if(!resolved[sheetCodeName]) {
     return -1;
   }
@@ -1859,7 +938,7 @@ async function renameSymbol(sheetCodeName, oldValue, newValue) {
     for (let i = 1; i < nbLineBef; i++) {
       for (let j = 0; j < colNumb; j++) {
         for (let k = 0; k < values[i][j].length; k++) {
-          if (searching(i, j, k)) {
+          if (searching(values, i, j, k)) {
             console.log("elem");
             if (elem) {
               if (stat2 > -1) {
@@ -1876,12 +955,12 @@ async function renameSymbol(sheetCodeName, oldValue, newValue) {
       }
     }
   }
-  correct(sheetCodeName);
+  correct(values, sheetCodeName);
   response.push({ "Renamings": [`renamed (${nbRen})`] });
   await check(sheetCodeName);
 }
 
-function handleoldNameInputClick() {
+function handleoldNameInputClick(values) {
 
   let rowId = range.rowIndex; // Directly use rowIndex property
   let totalRows = range.rowCount; // Get total rows in the selection
@@ -1892,24 +971,6 @@ function handleoldNameInputClick() {
   }
   response.push({ "oldNameInput": [values[rowId][0].join("; ")] });
   response.push({ "newNameInput": [values[rowId][0].join("; ")] });
-}
-
-async function ctrlZ(sheetCodeName) {
-  if (indOldValues > 0) {
-    indOldValues--;
-    values = oldValues[indOldValues];
-    correct(sheetCodeName);
-    await check(sheetCodeName);
-  }
-}
-
-async function ctrlY(sheetCodeName) {
-  if (indOldValues < oldValues.length - 1) {
-    indOldValues++;
-    values = oldValues[indOldValues];
-    correct(sheetCodeName);
-    await check(sheetCodeName);
-  }
 }
 
 function getTrimmedResult(str) {
@@ -2013,6 +1074,7 @@ app.post('/execute', async (req, res) => {
   }
   let body = req.body;
   const funcName = body.functionName;
+  let values = valuesGlob[sheetCodeName];
   switch (funcName) {
     case "handleChange":
       await handleChange(body.changes, sheetCodeName);
@@ -2025,35 +1087,42 @@ app.post('/execute', async (req, res) => {
     case 'chgSheet':
       sheetCodeName = body.sheetCodeName;
       headerColors = body.headerColors;
-      values = values0[sheetCodeName].map(r => r.map(c => c===null?[]:c.toString().split(';').map(k => k.trim().toLowerCase()).filter(k => k)));
       await handleChange([], sheetCodeName);
       break;
     case "dataGeneratorSub":
-      dataGeneratorSub(sheetCodeName);
+      dataGeneratorSub(values, sheetCodeName);
       break;
-      case "stop sorting":
-        if(sorting[sheetCodeName]) {
-          // TODO: call the C program to stop sorting
-        }
-        break;
+    case "stop sorting":
+      if(sorting[sheetCodeName]) {
+        // TODO: call the C program to stop sorting
+      }
+      break;
+    case "better sorting":
+      response.push({"sort": body});
+      break;
     case "C stops sorting":
       response.push({ "stop sorting": [] });
       sorting[sheetCodeName] = false;
       break;
     case "renameSymbol":
-      renameSymbol(sheetCodeName, body.oldValue, body.newValue);
+      renameSymbol(values, sheetCodeName, body.oldValue, body.newValue);
       break;
     case "handleoldNameInputClick":
-      handleoldNameInputClick();
+      handleoldNameInputClick(values);
       break;
+
+    // TODO
     case "ctrlZ":
-      ctrlZ(sheetCodeName);
+      // ctrlZ(sheetCodeName);
       break;
     case "ctrlY":
-      ctrlY(sheetCodeName);
+      // ctrlY(sheetCodeName);
       break;
+
     case "newSheet":
-      values0[body.sheetCodeName] = body.values;
+      sheetCodeName = body.sheetCodeName;
+      values0Glob[sheetCodeName] = body.values;
+      valuesGlob[sheetCodeName] = values0Glob[sheetCodeName].map(r => r.map(c => c===null?[]:c.toString().split(';').map(k => k.trim().toLowerCase()).filter(k => k)));
       sorting[body.sheetCodeName] = false;
       prevLine[body.sheetCodeName] = 0;
       break;

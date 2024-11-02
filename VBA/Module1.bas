@@ -386,7 +386,7 @@ Public Sub CallJavaScriptFunctionAsync(ByVal funcName As String, ParamArray para
     Set requestItem = New requestItem
     Set requestItem.http = http
     requestItem.funcName = funcName
-    requestItem.sheetCodeName = sheetCodeName
+    requestItem.sheetCodeName = ThisWorkbook.CodeName + "/" + sheetCodeName
         
     ' Generate the timestamp
     Dim timestamp As String
@@ -660,6 +660,9 @@ Public Sub CheckHttpResponse()
                                 Next oneListItem
                             Next subItem
                         Case "sort"
+                            
+
+
                             Dim fullName As String
                             fullName = ThisWorkbook.Name
                             Dim suffix As String
