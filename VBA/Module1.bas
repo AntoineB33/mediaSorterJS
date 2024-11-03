@@ -3,6 +3,39 @@ Attribute VB_Name = "Module1"
 
 
 
+Function GetRowAndColumn(cellAddress As String) As Variant
+    Dim columnLetters As String
+    Dim rowNumber As Long
+    Dim i As Long
+
+    ' Separate column letters and row numbers from cellAddress
+    For i = 1 To Len(cellAddress)
+        If IsNumeric(Mid(cellAddress, i, 1)) Then
+            rowNumber = CInt(Mid(cellAddress, i)) ' Extract row number directly
+            Exit For
+        Else
+            columnLetters = columnLetters & Mid(cellAddress, i, 1)
+        End If
+    Next i
+
+    ' Convert column letters to column number
+    Dim colNumber As Long
+    colNumber = ColumnNumberFromLetters(columnLetters)
+    
+    ' Return both row and column numbers as an array
+    GetRowAndColumn = Array(rowNumber, colNumber)
+End Function
+
+' Helper function to convert column letters to column number
+Function ColumnNumberFromLetters(columnLetters As String) As Long
+    Dim i As Long, colNum As Long
+    colNum = 0
+    For i = 1 To Len(columnLetters)
+        colNum = colNum * 26 + (Asc(UCase(Mid(columnLetters, i, 1))) - Asc("A") + 1)
+    Next i
+    ColumnNumberFromLetters = colNum
+End Function
+
 Sub DisplayImagesInUserForm()
     'DEBUG
     ' editRow = activeCell.Row
@@ -454,6 +487,57 @@ Function AddLineToTextFile(filePath As String, textToAdd As String)
     Close #1
 End Function
 
+Sub StoreInitialRows(sheetName As String, originalData As Dictionary)
+    Dim ws As Worksheet
+    Set ws = ThisWorkbook.Worksheets(sheetName)
+    
+    Dim rowCount As Long
+    rowCount = ws.UsedRange.Rows.Count
+    
+    Dim i As Long
+    ' Loop through each row and store its values in the dictionary
+    For i = 1 To rowCount
+        originalData(i) = ws.Rows(i).Value
+    Next i
+End Sub
+
+Sub SwapRowsBasedOnList(sheetName As String, originalData As Dictionary, swapList As Variant)
+    Dim ws As Worksheet
+    Set ws = ThisWorkbook.Worksheets(sheetName)
+    
+    Dim i As Integer
+    Dim row1 As Long, row2 As Long
+    Dim tempRow As Variant
+
+    ' Reset all rows to their original values before performing swaps
+    Dim key As Variant
+    For Each key In originalData.Keys
+        ws.Rows(key).Value = originalData(key)
+    Next key
+    
+    ' Perform row swaps based on swapList
+    For i = LBound(swapList) To UBound(swapList) Step 2
+        row1 = swapList(i)
+        row2 = swapList(i + 1)
+        
+        ' Store the values temporarily for swapping
+        tempRow = ws.Rows(row1).Value
+        ws.Rows(row1).Value = ws.Rows(row2).Value
+        ws.Rows(row2).Value = tempRow
+    Next i
+End Sub
+
+Function GetAfterSlash(inputString As String) As String
+    Dim position As Integer
+    position = InStr(inputString, "/")
+    
+    If position > 0 Then
+        GetAfterSlash = Mid(inputString, position + 1)
+    Else
+        GetAfterSlash = "" ' Return empty if "/" not found
+    End If
+End Function
+
 Public Sub CheckHttpResponse()
     Dim http As Object
     Dim jsonResponse As String
@@ -466,7 +550,7 @@ Public Sub CheckHttpResponse()
     Dim currentMsgType As Integer
     Dim color As Long
     Dim j As Integer
-    
+
     For j = requests.Count To 1 Step -1
         Set http = requests(j).http
         If http.readyState = 4 Then
@@ -660,8 +744,21 @@ Public Sub CheckHttpResponse()
                                 Next oneListItem
                             Next subItem
                         Case "sort"
-                            
+                            Dim givenSheet As String
+                            givenSheet = GetAfterSlash(item(key)("sheetCodeName"))
+                            If fstSort(givenSheet) Then
+                                Dim originalData As Object
+                                Set originalData = CreateObject("Scripting.Dictionary")
+                                
+                                ' Store the initial state of the sheet's rows
+                                Call StoreInitialRows(givenSheet, originalData)
+                                originalDatas(givenSheet) = originalData
+                                fstSort(givenSheet) = False
+                            End If
+                            Call SwapRowsBasedOnList(givenSheet, originalData, item(key)())
                         Case "stop sorting"
+                            Dim givenSheet As String
+                            givenSheet = GetAfterSlash(item(key)("sheetCodeName"))
                             sheetVBA.Unprotect
                             requests.Remove j
                         ' Case "sorting"

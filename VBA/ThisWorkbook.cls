@@ -2,7 +2,9 @@
 
 
 Private Sub Workbook_Open()
-    editRow = activeCell.Row
+    Dim result As Variant
+    result = GetRowAndColumn(activeCell.Address(False, False))
+    editRow = result(0)
     spacing = 10
     leftSpacing = 10
     thbnlDisplayed = False
@@ -74,8 +76,9 @@ Private Sub Workbook_Open()
     UserForm1.Show vbModeless ' Show the UserForm without blocking Excel
 
     Set sheetList = CreateObject("Scripting.Dictionary")
-    Set values = CreateObject("Scripting.Dictionary")
     Set sorting = CreateObject("Scripting.Dictionary")
+    Set fstSort = CreateObject("Scripting.Dictionary")
+    Set originalDatas = CreateObject("Scripting.Dictionary")
     Set targetAddress = CreateObject("Scripting.Dictionary")
     Set listBoxList = CreateObject("Scripting.Dictionary")
     ListSuggSt = "ListSugg"
@@ -118,23 +121,25 @@ Private Sub Workbook_SheetActivate(ByVal Sh As Object)
     Set sheetVBA = Sh
     sheetCodeName = Sh.codeName
     If Not sheetList.Exists(sheetCodeName) Then
-        ' Get the used range
         Dim usedRange As range
+        Dim myArray As Variant
         Set usedRange = Sh.usedRange
-        values.Add sheetCodeName, usedRange.Value
+        myArray = usedRange.Value
 
-        CallJavaScriptFunctionAsync "newSheet", False, "sheetCodeName", sheetCodeName, "values", values(sheetCodeName)
+        CallJavaScriptFunctionAsync "newSheet", False, "sheetCodeName", sheetCodeName, "values", myArray
         
         ' Add the data to the dictionary
         sheetList.Add sheetCodeName, Sh
         sorting.Add sheetCodeName, False
+        fstSort.Add sheetCodeName, True
+        originalDatas.Add sheetCodeName, myArray
         targetAddress.Add sheetCodeName, Application.Selection.Address
         listBoxList.Add sheetCodeName, Null
-        give_headerColors UBound(values(sheetCodeName), 2)
+        give_headerColors UBound(myArray, 2)
     Else
         give_headerColors
     End If
-    CallJavaScriptFunctionAsync "selectionChange", True, "editRow", activeCell.Row, "editCol", activeCell.Column
+    CallJavaScriptFunctionAsync "selectionChange", True, "editRow", result(0), "editCol", result(1)
 End Sub
 
 Private Sub Workbook_SheetChange(ByVal Sh As Object, ByVal Target As range)
@@ -148,12 +153,13 @@ Private Sub Workbook_SheetChange(ByVal Sh As Object, ByVal Target As range)
     ' Iterate through each cell in the Target range
     i = 1
     For Each cell In Target
-        changes(i, 1) = cell.Row
-        changes(i, 2) = cell.Column
+        Dim result As Variant
+        result = GetRowAndColumn(cell.Address(False, False))
+        changes(i, 1) = result(0)
+        changes(i, 2) = result(1)
         changes(i, 3) = CStr(cell.Value)
         i = i + 1
     Next cell
-    
     CallJavaScriptFunctionAsync "handleChange", True, "changes", changes
 End Sub
 

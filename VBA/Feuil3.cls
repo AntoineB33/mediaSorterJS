@@ -7,11 +7,12 @@
 
 
 Private Sub Worksheet_SelectionChange(ByVal Target As range)
-    ' Call the sub from ThisWorkbook
-    editRow = activeCell.Row
+    Dim result As Variant
+    result = GetRowAndColumn(activeCell.Address(False, False))
+    editRow = result(0)
     Dim selectedRow As Long
     selectedRow = editRow
-    editColumn = activeCell.Column
+    editColumn = result(1)
     CallJavaScriptFunctionAsync "selectionChange", True, "editRow", editRow, "editCol", editColumn
     
     If thbnlDisplayed Then
