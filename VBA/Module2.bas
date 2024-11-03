@@ -16,6 +16,7 @@ Public requests As Collection
 Public logFile As String
 Public timerStarted As Boolean
 Public sheetList As Object
+Public values As Object
 
 Public labelTopPos As Integer
 Public labelLeftPos As Integer

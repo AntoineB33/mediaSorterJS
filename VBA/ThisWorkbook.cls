@@ -74,6 +74,7 @@ Private Sub Workbook_Open()
     UserForm1.Show vbModeless ' Show the UserForm without blocking Excel
 
     Set sheetList = CreateObject("Scripting.Dictionary")
+    Set values = CreateObject("Scripting.Dictionary")
     Set sorting = CreateObject("Scripting.Dictionary")
     Set targetAddress = CreateObject("Scripting.Dictionary")
     Set listBoxList = CreateObject("Scripting.Dictionary")
@@ -119,18 +120,17 @@ Private Sub Workbook_SheetActivate(ByVal Sh As Object)
     If Not sheetList.Exists(sheetCodeName) Then
         ' Get the used range
         Dim usedRange As range
-        Dim myArray As Variant
         Set usedRange = Sh.usedRange
-        myArray = usedRange.Value
+        values.Add sheetCodeName, usedRange.Value
 
-        CallJavaScriptFunctionAsync "newSheet", False, "sheetCodeName", sheetCodeName, "values", myArray
+        CallJavaScriptFunctionAsync "newSheet", False, "sheetCodeName", sheetCodeName, "values", values(sheetCodeName)
         
         ' Add the data to the dictionary
         sheetList.Add sheetCodeName, Sh
         sorting.Add sheetCodeName, False
         targetAddress.Add sheetCodeName, Application.Selection.Address
         listBoxList.Add sheetCodeName, Null
-        give_headerColors UBound(myArray, 2)
+        give_headerColors UBound(values(sheetCodeName), 2)
     Else
         give_headerColors
     End If

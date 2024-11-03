@@ -661,38 +661,6 @@ Public Sub CheckHttpResponse()
                             Next subItem
                         Case "sort"
                             
-
-
-                            Dim fullName As String
-                            fullName = ThisWorkbook.Name
-                            Dim suffix As String
-                            suffix = Left(fullName, InStrRev(fullName, ".") - 1) & "\" & sheet.Name
-                            Dim filePath As String
-                            filePath = dataFolderPath & suffix & ".txt"
-                            Dim fileNumber As Integer
-
-                            
-                            ' Check if the directory exists, if not, create it
-                            If Dir(dataFolderName, vbDirectory) = "" Then
-                                MkDir dataFolderName
-                            End If
-
-                            ' Open the file for writing
-                            fileNumber = FreeFile
-                            Open filePath For Output As fileNumber
-
-                            Dim linesToWriteInFile() As String
-                            linesToWriteInFile = Split(VBARequestParts(1), vbLf)
-                            For Each Line In linesToWriteInFile
-                                Print #fileNumber, Line
-                            Next Line
-
-                            ' Close the file
-                            Close fileNumber
-                            
-                            Dim cFilePath As String
-                            cFilePath = Root & "programs\c_prog\Project2\x64\Debug\Project2.exe " & suffix
-                            'ExecuteCFile cFilePath
                         Case "stop sorting"
                             sheetVBA.Unprotect
                             requests.Remove j
