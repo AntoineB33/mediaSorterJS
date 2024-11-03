@@ -420,6 +420,7 @@ Public Sub CallJavaScriptFunctionAsync(ByVal funcName As String, ParamArray para
     Set requestItem.http = http
     requestItem.funcName = funcName
     requestItem.sheetCodeName = ThisWorkbook.CodeName + "/" + sheetCodeName
+    requestItem.oneAnswer = funcName <> "dataGeneratorSub"
         
     ' Generate the timestamp
     Dim timestamp As String
@@ -451,7 +452,6 @@ Public Sub CallJavaScriptFunctionAsync(ByVal funcName As String, ParamArray para
     ' Send the request with the function name and parameters
     http.send jsonRequest
 
-    http.oneAnswer = funcName <> "dataGeneratorSub"
 
     ' Add lines of text to the file
     AddLineToTextFile logFile, "Invoke-RestMethod -Uri http://localhost:3000/execute -Method Post -Headers @{ ""Content-Type"" = ""application/json"" } -Body '" & jsonRequest & "'"

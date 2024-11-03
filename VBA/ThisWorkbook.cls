@@ -132,14 +132,18 @@ Private Sub Workbook_SheetActivate(ByVal Sh As Object)
         sheetList.Add sheetCodeName, Sh
         sorting.Add sheetCodeName, False
         fstSort.Add sheetCodeName, True
-        originalDatas.Add sheetCodeName, myArray
+        originalDatas.Add sheetCodeName, Null
         targetAddress.Add sheetCodeName, Application.Selection.Address
         listBoxList.Add sheetCodeName, Null
         give_headerColors UBound(myArray, 2)
     Else
         give_headerColors
     End If
-    CallJavaScriptFunctionAsync "selectionChange", True, "editRow", result(0), "editCol", result(1)
+    Dim result As Variant
+    result = GetRowAndColumn(activeCell.Address(False, False))
+    editRow = result(0)
+    editColumn = result(1)
+    CallJavaScriptFunctionAsync "selectionChange", True, "editRow", editRow, "editCol", editCol
 End Sub
 
 Private Sub Workbook_SheetChange(ByVal Sh As Object, ByVal Target As range)

@@ -10,8 +10,6 @@ Private Sub Worksheet_SelectionChange(ByVal Target As range)
     Dim result As Variant
     result = GetRowAndColumn(activeCell.Address(False, False))
     editRow = result(0)
-    Dim selectedRow As Long
-    selectedRow = editRow
     editColumn = result(1)
     CallJavaScriptFunctionAsync "selectionChange", True, "editRow", editRow, "editCol", editColumn
     
