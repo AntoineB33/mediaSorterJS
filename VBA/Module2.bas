@@ -18,7 +18,7 @@ Public timerStarted As Boolean
 Public sheetList As Object
 Public fstSort As Object
 Public originalData As Object
-Dim originalDatas As Object
+Public originalDatas As Object
 
 Public labelTopPos As Integer
 Public labelLeftPos As Integer

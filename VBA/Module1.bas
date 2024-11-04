@@ -419,7 +419,7 @@ Public Sub CallJavaScriptFunctionAsync(ByVal funcName As String, ParamArray para
     Set requestItem = New requestItem
     Set requestItem.http = http
     requestItem.funcName = funcName
-    requestItem.sheetCodeName = ThisWorkbook.CodeName + "/" + sheetCodeName
+    requestItem.sheetCodeName = sheetCodeName
     requestItem.oneAnswer = funcName <> "dataGeneratorSub"
         
     ' Generate the timestamp
@@ -527,17 +527,6 @@ Sub SwapRowsBasedOnList(sheetName As String, originalData As Dictionary, swapLis
     Next i
 End Sub
 
-Function GetAfterSlash(inputString As String) As String
-    Dim position As Integer
-    position = InStr(inputString, "/")
-    
-    If position > 0 Then
-        GetAfterSlash = Mid(inputString, position + 1)
-    Else
-        GetAfterSlash = "" ' Return empty if "/" not found
-    End If
-End Function
-
 Public Sub CheckHttpResponse()
     Dim http As Object
     Dim jsonResponse As String
@@ -561,6 +550,7 @@ Public Sub CheckHttpResponse()
                 Set jsonArray = JsonConverter.ParseJson(jsonResponse)
                 For Each item In jsonArray
                     For Each key In item.Keys
+                        Dim givenSheet As String
                         Select Case key
                         ' Case "styleBorders"
                         '     styleBorders CInt(VBARequestParts(1)), CInt(VBARequestParts(2)), CInt(VBARequestParts(3)), CBool(VBARequestParts(5))
@@ -744,8 +734,7 @@ Public Sub CheckHttpResponse()
                                 Next oneListItem
                             Next subItem
                         Case "sort"
-                            Dim givenSheet As String
-                            givenSheet = GetAfterSlash(item(key)("sheetCodeName"))
+                            givenSheet = item(key)("sheetCodeName")
                             If fstSort(givenSheet) Then
                                 Dim originalData As Object
                                 Set originalData = CreateObject("Scripting.Dictionary")
@@ -757,8 +746,7 @@ Public Sub CheckHttpResponse()
                             End If
                             Call SwapRowsBasedOnList(givenSheet, originalData, item(key)())
                         Case "stop sorting"
-                            Dim givenSheet As String
-                            givenSheet = GetAfterSlash(item(key)("sheetCodeName"))
+                            givenSheet = item(key)("sheetCodeName")
                             sheetVBA.Unprotect
                             requests.Remove j
                         ' Case "sorting"

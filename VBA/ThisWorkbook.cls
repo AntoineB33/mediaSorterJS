@@ -119,7 +119,7 @@ End Sub
 
 Private Sub Workbook_SheetActivate(ByVal Sh As Object)
     Set sheetVBA = Sh
-    sheetCodeName = Sh.codeName
+    sheetCodeName = ThisWorkbook.CodeName + "/" + Sh.codeName
     If Not sheetList.Exists(sheetCodeName) Then
         Dim usedRange As range
         Dim myArray As Variant

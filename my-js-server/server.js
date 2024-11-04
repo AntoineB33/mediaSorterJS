@@ -824,21 +824,11 @@ function correct(values, sheetCodeName) {
   for (let i = 1; i < nbLineBef; i++) {
     for (let j = 0; j < colNumb; j++) {
       let value = values[i][j].join("; ");
-      if (values0Glob[sheetCodeName][i][j] != value) {
+      if (values0Glob[sheetCodeName][i][j] != value && values0Glob[sheetCodeName][i][j]!=null && value != "") {
         values0Glob[sheetCodeName][i][j] = value;
         response.push({ "chgValue": [i + 1, j + 1, value] });
       }
     }
-  }
-}
-
-function customSort(a, b) {
-  if (a.mediaNb != 0 && b.mediaNb == 0) {
-    return -1; // 'a' comes before 'b'
-  } else if (a.mediaNb == 0 && b.mediaNb != 0) {
-    return 1; // 'b' comes before 'a'
-  } else {
-    return 0; // maintain original order
   }
 }
 

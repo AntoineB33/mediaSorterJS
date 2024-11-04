@@ -1000,3 +1000,21 @@ async function handleChangeCaller(updates, sheetCodeName) {
       }
     }
   }
+
+
+
+
+
+
+
+  
+
+function customSort(a, b) {
+  if (a.mediaNb != 0 && b.mediaNb == 0) {
+    return -1; // 'a' comes before 'b'
+  } else if (a.mediaNb == 0 && b.mediaNb != 0) {
+    return 1; // 'b' comes before 'a'
+  } else {
+    return 0; // maintain original order
+  }
+}
