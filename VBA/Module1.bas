@@ -786,3 +786,14 @@ Public Sub CheckHttpResponse()
         timerStarted = False
     End If
 End Sub
+
+Function YourMacroName(param1 As String, param2 As String)
+    MsgBox "Param1: " & param1 & vbCrLf & "Param2: " & param2
+    YourMacroName = 0
+End Function
+
+Function PrintStringAndList(str As String, intList As Variant)
+    ' Print the string and the list with MsgBox
+    MsgBox "String: " & str & vbCrLf & "List: " & Join(intList, ", ")
+    PrintStringAndList2 = 0
+End Function
