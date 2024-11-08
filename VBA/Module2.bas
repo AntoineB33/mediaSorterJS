@@ -42,6 +42,8 @@ Public spacing As Single
 Public leftSpacing As Single
 Public thbnlDisplayed As Boolean
 
+Public currentOrder As Variant
+
 
 Type SYSTEMTIME
     wYear As Integer

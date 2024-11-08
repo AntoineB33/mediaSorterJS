@@ -34,8 +34,14 @@ Private Sub SortButton_Click()
     Else
         sheetVBA.Protect UserInterfaceOnly:=True
         SortButton.Caption = "Stop sorting"
-        CallJavaScriptFunctionAsync "dataGeneratorSub", True
         UpdateSortButton.ForeColor = RGB(0, 0, 0)
+        Dim totalRows As Long
+        totalRows = Range("A" & Rows.Count).End(xlUp).Row - 1
+        ReDim currentOrder(2 To totalRows + 1)
+        For i = 2 To totalRows + 1
+            currentOrder(i) = i ' Start with the original order
+        Next i
+        CallJavaScriptFunctionAsync "dataGeneratorSub", True
     End If
     sorting(sheetCodeName) = Not sorting(sheetCodeName)
 End Sub

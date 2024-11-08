@@ -787,13 +787,59 @@ Public Sub CheckHttpResponse()
     End If
 End Sub
 
-Function YourMacroName(param1 As String, param2 As String)
-    MsgBox "Param1: " & param1 & vbCrLf & "Param2: " & param2
-    YourMacroName = 0
-End Function
+Sub test()
+    Dim ws As Worksheet
+    Set ws = ThisWorkbook.Worksheets("Feuil3")
+    ws.Unprotect
+    Dim indices As Variant
+    indices = Array(2, 4, 3)
+    Call SwapRows("Feuil3", indices)
+End Sub
 
-Function PrintStringAndList(str As String, intList As Variant)
-    ' Print the string and the list with MsgBox
-    MsgBox "String: " & str & vbCrLf & "List: " & Join(intList, ", ")
-    PrintStringAndList2 = 0
+Function SwapRows(sheetCodeName As String, indices As Variant) As Integer
+    Dim ws As Worksheet
+    Dim i As Long
+    Dim totalRows As Long
+    Dim tempRow As Variant
+
+    ' Set the worksheet using the code name
+    Set ws = ThisWorkbook.Worksheets(sheetCodeName)
+
+    ' get the length of `indices`
+    totalRows = UBound(indices) - LBound(indices) + 1
+
+    ' Initialize the current order on the first call
+    If IsEmpty(currentOrder) Then
+        ReDim currentOrder(2 To totalRows + 1)
+        For i = 2 To totalRows + 1
+            currentOrder(i) = i ' Start with the original order
+        Next i
+    End If
+
+    ' Create a temporary array to hold the new order based on the given indices
+    Dim newOrder() As Variant
+    ReDim newOrder(2 To totalRows + 1)
+
+    ' Fill the new order based on the indices provided
+    For i = LBound(indices) To UBound(indices)
+        newOrder(i + 2) = currentOrder(indices(i)) ' Map current order to the new order
+    Next i
+
+    ' Disable events to prevent Workbook_SheetChange from being triggered
+    Application.EnableEvents = False
+
+    ' Update the worksheet with the new order
+    For i = 2 To totalRows + 1
+        If Not IsEmpty(newOrder(i)) Then
+            ws.Rows(i).Value = ws.Rows(newOrder(i)).Value
+        End If
+    Next i
+
+    ' Re-enable events after making changes
+    Application.EnableEvents = True
+
+    ' Update the current order to reflect the new row positions
+    currentOrder = newOrder
+
+    SwapRows = 0
 End Function
