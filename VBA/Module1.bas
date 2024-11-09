@@ -51,9 +51,6 @@ Sub DisplayImagesInUserForm()
     Dim foundImage As Boolean
     Dim FolderPath As String
 
-    ' Assuming the worksheet is active
-    Set ws = ActiveSheet
-
     ' Specify the folder path to search
     FolderPath = "C:\Users\abarb\Documents\health\news_underground\mediaSorter\media"
 
@@ -76,7 +73,7 @@ Sub DisplayImagesInUserForm()
     startNum = editRow
     minInt = 2
     Dim maxInt As Integer
-    maxInt = ws.Cells(ws.Rows.Count, 1).End(xlUp).Row
+    maxInt = sheetVBA.Cells(ws.Rows.Count, 1).End(xlUp).Row
     If startNum < minInt Then
         startNum = minInt
     ElseIf startNum > maxInt Then
@@ -139,7 +136,7 @@ Sub DisplayImagesInUserForm()
             End If
         End If
         ' Get the filename without extension from the 6th column (e.g., column F)
-        FileNameWithoutExt = ws.Cells(currentRow, 6).Value
+        FileNameWithoutExt = sheetVBA.Cells(currentRow, 6).Value
         ' Check if the file exists
         FilePath = SearchFileInFolder(FolderPath, FileNameWithoutExt)
 
@@ -420,7 +417,6 @@ Public Sub CallJavaScriptFunctionAsync(ByVal funcName As String, ParamArray para
     Set requestItem.http = http
     requestItem.funcName = funcName
     requestItem.sheetCodeName = sheetCodeName
-    requestItem.oneAnswer = funcName <> "dataGeneratorSub"
         
     ' Generate the timestamp
     Dim timestamp As String
@@ -498,32 +494,6 @@ Sub StoreInitialRows(sheetName As String, originalData As Dictionary)
     ' Loop through each row and store its values in the dictionary
     For i = 1 To rowCount
         originalData(i) = ws.Rows(i).Value
-    Next i
-End Sub
-
-Sub SwapRowsBasedOnList(sheetName As String, originalData As Dictionary, swapList As Variant)
-    Dim ws As Worksheet
-    Set ws = ThisWorkbook.Worksheets(sheetName)
-    
-    Dim i As Integer
-    Dim row1 As Long, row2 As Long
-    Dim tempRow As Variant
-
-    ' Reset all rows to their original values before performing swaps
-    Dim key As Variant
-    For Each key In originalData.Keys
-        ws.Rows(key).Value = originalData(key)
-    Next key
-    
-    ' Perform row swaps based on swapList
-    For i = LBound(swapList) To UBound(swapList) Step 2
-        row1 = swapList(i)
-        row2 = swapList(i + 1)
-        
-        ' Store the values temporarily for swapping
-        tempRow = ws.Rows(row1).Value
-        ws.Rows(row1).Value = ws.Rows(row2).Value
-        ws.Rows(row2).Value = tempRow
     Next i
 End Sub
 
@@ -733,22 +703,6 @@ Public Sub CheckHttpResponse()
                                     LabelHandlers.Add labelHandler
                                 Next oneListItem
                             Next subItem
-                        Case "sort"
-                            givenSheet = item(key)("sheetCodeName")
-                            If fstSort(givenSheet) Then
-                                Dim originalData As Object
-                                Set originalData = CreateObject("Scripting.Dictionary")
-                                
-                                ' Store the initial state of the sheet's rows
-                                Call StoreInitialRows(givenSheet, originalData)
-                                originalDatas(givenSheet) = originalData
-                                fstSort(givenSheet) = False
-                            End If
-                            Call SwapRowsBasedOnList(givenSheet, originalData, item(key)())
-                        Case "stop sorting"
-                            givenSheet = item(key)("sheetCodeName")
-                            sheetVBA.Unprotect
-                            requests.Remove j
                         ' Case "sorting"
                         '     sorting(sheetCodeName) = Not sorting(sheetCodeName)
                         ' Case "Renamings"
@@ -763,9 +717,7 @@ Public Sub CheckHttpResponse()
                         End Select
                     Next key
                 Next item
-                If requests(j).oneAnswer Then
-                    requests.Remove j
-                End If
+                requests.Remove j
             Else
                 MsgBox "Error: " & http.statusText
                 requests.Remove j
@@ -787,59 +739,163 @@ Public Sub CheckHttpResponse()
     End If
 End Sub
 
-Sub test()
+Sub SwapRows(sheetCodeNameLocal As String, indices As Variant)
     Dim ws As Worksheet
-    Set ws = ThisWorkbook.Worksheets("Feuil3")
-    ws.Unprotect
-    Dim indices As Variant
-    indices = Array(2, 4, 3)
-    Call SwapRows("Feuil3", indices)
-End Sub
-
-Function SwapRows(sheetCodeName As String, indices As Variant) As Integer
-    Dim ws As Worksheet
-    Dim i As Long
+    Dim i As Long, j As Long
     Dim totalRows As Long
     Dim tempRow As Variant
-
+    Dim colCount As Long
+    
     ' Set the worksheet using the code name
-    Set ws = ThisWorkbook.Worksheets(sheetCodeName)
-
-    ' get the length of `indices`
+    Set ws = sheetList(sheetCodeNameLocal)
+    
+    ' Determine the number of rows and columns to copy
     totalRows = UBound(indices) - LBound(indices) + 1
-
-    ' Initialize the current order on the first call
-    If IsEmpty(currentOrder) Then
-        ReDim currentOrder(2 To totalRows + 1)
-        For i = 2 To totalRows + 1
-            currentOrder(i) = i ' Start with the original order
-        Next i
-    End If
-
-    ' Create a temporary array to hold the new order based on the given indices
-    Dim newOrder() As Variant
-    ReDim newOrder(2 To totalRows + 1)
-
-    ' Fill the new order based on the indices provided
-    For i = LBound(indices) To UBound(indices)
-        newOrder(i + 2) = currentOrder(indices(i)) ' Map current order to the new order
-    Next i
+    colCount = ws.UsedRange.Columns.Count
 
     ' Disable events to prevent Workbook_SheetChange from being triggered
     Application.EnableEvents = False
 
-    ' Update the worksheet with the new order
+    ' Update the worksheet with the new order by writing back the cell values
     For i = 2 To totalRows + 1
-        If Not IsEmpty(newOrder(i)) Then
-            ws.Rows(i).Value = ws.Rows(newOrder(i)).Value
-        End If
+        For j = 1 To colCount
+            ws.Cells(i, j).Value = currentOrder(sheetCodeNameLocal)(indices(i - 2) + 2, j)
+        Next j
     Next i
 
     ' Re-enable events after making changes
     Application.EnableEvents = True
+End Sub
 
-    ' Update the current order to reflect the new row positions
-    currentOrder = newOrder
+Public Sub give_headerColors(Optional newColCount As Long)
+    If newColCount = 0 Then
+        ' Determine the last column by finding the last non-empty cell in the header row
+        newColCount = sheetVBA.Cells(1, sheetVBA.Columns.Count).End(xlToLeft).Column
+    End If
+    ' get the color of each header
+    Dim headerColors() As Variant
+    ReDim headerColors(1 To newColCount)
+    Dim j As Long
+    For j = 1 To newColCount
+        headerColors(j) = sheetVBA.Cells(1, j).Interior.color
+    Next j
+    CallJavaScriptFunctionAsync "chgSheet", True, "sheetCodeName", sheetCodeName, "headerColors", headerColors
+End Sub
 
-    SwapRows = 0
+Public Sub switchSort(sheetCodeNameLocal As String)
+    Dim ws As Worksheet
+    Set ws = sheetList(sheetCodeNameLocal)
+    If sorting(sheetCodeNameLocal) Then
+        If(sheetCodeNameLocal = sheetCodeName) Then
+            UserForm1.SortButton.Caption = "Sort"
+            UserForm1.UpdateSortButton.ForeColor = RGB(128, 128, 128)
+        End If
+        ws.Unprotect
+        CallJavaScriptFunctionAsync "stop sorting", True
+    Else
+        If(sheetCodeNameLocal = sheetCodeName) Then
+            UserForm1.SortButton.Caption = "Stop sorting"
+            UserForm1.UpdateSortButton.ForeColor = RGB(0, 0, 0)
+        End If
+        ws.Protect UserInterfaceOnly:=True
+        Dim totalRows As Long
+        Dim colCount As Long
+        totalRows = ws.UsedRange.Rows.Count
+        colCount = ws.UsedRange.Columns.Count
+        
+        Dim tempArray() As Variant
+
+        ' Resize the array
+        ReDim tempArray(2 To totalRows + 1, 1 To colCount)
+
+        ' Assign the resized array back to the dictionary
+        currentOrder(sheetCodeNameLocal) = tempArray
+    
+        For i = 2 To totalRows + 1
+            For j = 1 To colCount
+                currentOrder(sheetCodeNameLocal)(i, j) = ws.Cells(i, j).Value ' Copy the cell values into the current order array
+            Next j
+        Next i
+        CallJavaScriptFunctionAsync "dataGeneratorSub", True
+    End If
+    sorting(sheetCodeNameLocal) = Not sorting(sheetCodeNameLocal)
+End Sub
+
+Public Function SetOrGetUniqueWorkbookID()
+    Dim uniqueID As String
+    Dim workbook As Workbook
+    Dim customProperties As DocumentProperties
+    Dim propertyExists As Boolean
+    propertyExists = False
+    
+    ' Reference the current workbook
+    Set workbook = ThisWorkbook
+    Set customProperties = workbook.CustomDocumentProperties
+    
+    ' Check if the custom property "UniqueID" exists
+    On Error Resume Next
+    uniqueID = customProperties("UniqueID").Value
+    If Err.Number = 0 Then
+        propertyExists = True
+    End If
+    On Error GoTo 0
+    
+    ' If the UniqueID does not exist, create one
+    If Not propertyExists Then
+        uniqueID = CreateGUID()
+        customProperties.Add Name:="UniqueID", LinkToContent:=False, Type:=msoPropertyTypeString, Value:=uniqueID
+    End If
+    
+    ' Display the Unique ID
+    SetOrGetUniqueWorkbookID = uniqueID
+End Function
+
+' Function to generate a GUID (Globally Unique Identifier)
+Private Function CreateGUID2() As String
+    Dim guid As String
+    guid = Mid$(CreateObject("Scriptlet.TypeLib").GUID, 2, 36)
+    CreateGUID = guid
+End Function
+
+Private Function CreateGUID() As String
+    Dim timestamp As String
+    timestamp = Format(Now, "yyyyMMddHHmmss") & Format(Rnd * 100000, "000000")
+    CreateGUID = Left(timestamp, 8) & "-" & Mid(timestamp, 9, 4) & "-" & Mid(timestamp, 13, 4) & "-" & Right(timestamp, 4)
+End Function
+
+
+Public Function SetOrGetUniqueWorkbookID2()
+    Dim uniqueID As String
+    Dim ws As Worksheet
+    Dim propertyExists As Boolean
+    propertyExists = False
+    
+    ' Try to find the hidden worksheet for settings
+    On Error Resume Next
+    Set ws = ThisWorkbook.Worksheets("HiddenSettings")
+    On Error GoTo 0
+    
+    ' If the worksheet does not exist, create it
+    If ws Is Nothing Then
+        Set ws = ThisWorkbook.Worksheets.Add
+        ws.Name = "HiddenSettings"
+        ws.Visible = xlSheetVeryHidden
+    End If
+    
+    ' Check if the unique ID is already in the worksheet
+    On Error Resume Next
+    uniqueID = ws.Range("A1").Value
+    If uniqueID <> "" Then
+        propertyExists = True
+    End If
+    On Error GoTo 0
+    
+    ' If the UniqueID does not exist, create one
+    If Not propertyExists Then
+        uniqueID = CreateGUID()
+        ws.Range("A1").Value = uniqueID
+    End If
+    
+    ' Display the Unique ID
+    SetOrGetUniqueWorkbookID = uniqueID
 End Function

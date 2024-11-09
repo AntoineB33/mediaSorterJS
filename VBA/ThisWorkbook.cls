@@ -77,6 +77,7 @@ Private Sub Workbook_Open()
 
     Set sheetList = CreateObject("Scripting.Dictionary")
     Set sorting = CreateObject("Scripting.Dictionary")
+    Set currentOrder = CreateObject("Scripting.Dictionary")
     Set fstSort = CreateObject("Scripting.Dictionary")
     Set originalDatas = CreateObject("Scripting.Dictionary")
     Set targetAddress = CreateObject("Scripting.Dictionary")
@@ -102,24 +103,9 @@ Sub RunCmdAndWait()
     exitCode = wsh.Run("cmd.exe /C """ & cmd & """", 0, True) ' vbHide is 0
 End Sub
 
-Public Sub give_headerColors(Optional newColCount As Long)
-    If newColCount = 0 Then
-        ' Determine the last column by finding the last non-empty cell in the header row
-        newColCount = sheetVBA.Cells(1, sheetVBA.Columns.Count).End(xlToLeft).Column
-    End If
-    ' get the color of each header
-    Dim headerColors() As Variant
-    ReDim headerColors(1 To newColCount)
-    Dim j As Long
-    For j = 1 To newColCount
-        headerColors(j) = sheetVBA.Cells(1, j).Interior.color
-    Next j
-    CallJavaScriptFunctionAsync "chgSheet", True, "sheetCodeName", sheetCodeName, "headerColors", headerColors
-End Sub
-
 Private Sub Workbook_SheetActivate(ByVal Sh As Object)
     Set sheetVBA = Sh
-    sheetCodeName = ThisWorkbook.CodeName + "/" + Sh.codeName
+    sheetCodeName = SetOrGetUniqueWorkbookID + "/" + Sh.codeName
     If Not sheetList.Exists(sheetCodeName) Then
         Dim usedRange As range
         Dim myArray As Variant
@@ -131,6 +117,7 @@ Private Sub Workbook_SheetActivate(ByVal Sh As Object)
         ' Add the data to the dictionary
         sheetList.Add sheetCodeName, Sh
         sorting.Add sheetCodeName, False
+        currentOrder.Add sheetCodeName, Null
         fstSort.Add sheetCodeName, True
         originalDatas.Add sheetCodeName, Null
         targetAddress.Add sheetCodeName, Application.Selection.Address

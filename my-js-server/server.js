@@ -35,6 +35,7 @@ var attNames;
 var actionsHistory = {};
 var indActHist = 0;
 let handleChanges = {};
+let rowIdMap = {};
 
 // [node.js]
 var response;
@@ -75,6 +76,18 @@ function getColumnTag(num) {
       num = Math.floor(num / 26) - 1;
   }
   return columnTag;
+}
+
+function addListBoxList() {
+  if(response.length === 0) {
+    response.push({});
+  }
+  if(response[0]["listBoxList"] === undefined) {
+    response[0]["listBoxList"] = [];
+    for (const key in msgType) {
+      response[0]["listBoxList"].push([]);
+    }
+  }
 }
 
 /**
@@ -188,8 +201,12 @@ async function handleChange(updates, sheetCodeName) {
       values[row][column] = splitValue;
       values0[row][column] = value;
     } else {
+      // the user has deleted a cell
+
       values[row][column] = [];
       values0[row][column] = value;
+
+      // remove empty lines at the end
       const nbLineBefBef = nbLineBef;
       for (let i = nbLineBef - 1; i > 0; i--) {
         if (values[i].some(v => v.length != 0)) {
@@ -199,6 +216,7 @@ async function handleChange(updates, sheetCodeName) {
       }
       values.splice(nbLineBef, nbLineBefBef - nbLineBef);
       values0.splice(nbLineBef, nbLineBefBef - nbLineBef);
+
       if(column === colNumb - 1) {
         let newColNumb = colNumb;
         let stop = false;
@@ -344,20 +362,24 @@ function checkBrack(values, i, j, k, val, columnTitle) {
 }
 
 function initializeData(values) {
+  rowIdMap[sheetCodeName] = [];
   for (let i = 1; i < nbLineBef; i++) {
     data.push({attributes: new Set(), posteriors: [], ulteriors: [], nbPost: 0, minDist: 0, maxDist: Infinity});
     // check if a non-empty row has no name
-    if(!values[i][nameInd].length) {
-      for (let j = 0; j < values[i].length; j++) {
-        if (values[i][j].length !== 0) {
-          inconsist(i, nameInd, `missing name at ${getAddress(i, nameInd)}`, [[findNewName(values, "")]]);
-          return -1;
-        }
+    let isEmpty = true;
+    for (let j = 0; j < colNumb; j++) {
+      if (values[i][j] !== '') {
+        isEmpty = false;
+        break;
       }
+    }
+    if(isEmpty) {
       data[i] = -1;
-      continue;
+    } else {
+      rowIdMap[sheetCodeName].push(i);
     }
   }
+  data = data.filter(e => e !== -1);
 }
 
 function getAttributes(values, sheetCodeName) {
@@ -696,6 +718,7 @@ async function getConditions(values, sheetCodeName) {
   };
   // let result = await callCProgram(exampleInput);
   
+  response.push({ "listBoxList": [] });
   resolved[sheetCodeName] = true;
 }
 
@@ -767,10 +790,12 @@ function midToWhite(theMsgType = msgType.ERROR) {
 }
 
 function displayReference(values, row) {
+  addListBoxList();
   response[0]["listBoxList"][msgType.RELATIVES].push({color: msgTypeColors[msgType.RELATIVES], msg: "; ".join(values[r][0]), actions: [{action: Actions.Select, address: [row, 0]}]});
 }
 
 function inconsist(i, j, message, suggs, theAction = Actions.NewVal) {
+  addListBoxList();
   response[0]["listBoxList"][msgType.ERROR].push({color: msgTypeColors[msgType.ERROR], msg: message, actions: [{action: Actions.Select, address: [i, j]}]});
   suggs.forEach(sugg => {
     let theNewVal = sugg;
@@ -1058,10 +1083,7 @@ app.post('/execute', async (req, res) => {
     }
   });
   
-  response = [{"listBoxList": []}];
-  for (const key in msgType) {
-    response[0]["listBoxList"].push([]);
-  }
+  response = [];
   let body = req.body;
   const funcName = body.functionName;
   let values = valuesGlob[sheetCodeName];
@@ -1137,16 +1159,6 @@ app.post('/execute', async (req, res) => {
           console.log(`Résultat: ${stdout}`);
       });
       break;
-  }
-  let empty = true;
-  for (const msgT in response[0]["listBoxList"]) {
-    if(msgT.length) {
-      empty = false;
-      break;
-    }
-  }
-  if(empty) {
-    delete response[0]["listBoxList"];
   }
   res.json(response);
 });

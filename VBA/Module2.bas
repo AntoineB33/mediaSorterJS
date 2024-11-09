@@ -31,6 +31,7 @@ Public sheetVBA As Worksheet
 Public sheet As Worksheet
 Public sorting As Object
 Public targetAddress As Object
+Public currentOrder As Object
 Public newCollection As Collection
 Public LabelHandlers As Collection
 Public listBoxList As Object
@@ -41,8 +42,6 @@ Public editColumn As Long
 Public spacing As Single
 Public leftSpacing As Single
 Public thbnlDisplayed As Boolean
-
-Public currentOrder As Variant
 
 
 Type SYSTEMTIME
