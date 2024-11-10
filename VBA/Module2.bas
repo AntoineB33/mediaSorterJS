@@ -36,6 +36,7 @@ Public newCollection As Collection
 Public LabelHandlers As Collection
 Public listBoxList As Object
 Public ListSuggSt As String
+Public port As Integer
 
 Public editRow As Long
 Public editColumn As Long

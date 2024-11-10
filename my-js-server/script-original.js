@@ -24,7 +24,8 @@ var oldValues = [];
 var indOldValues = 0;
 var perRef = [];
 var periods = [];
-var colNumb;
+var nbLineBef = {};
+var colNumb = {};
 var perNot;
 var stop = false;
 var data = [];
@@ -38,7 +39,6 @@ var perLen = 0;
 var perInt = [];
 var perIntCont = [];
 var prevLine = 0;
-var nbLineBef;
 var fileId = "1EoCDqXsL0tqAW6M7qVQT_N7L_NsBirMJ";
 var values0;
 var lenAgg;
@@ -362,6 +362,9 @@ async function handleSelectLinks(context, address) {
     
     const suggestionList = document.getElementById("relatives-list");
     suggestionList.innerHTML = ""; // Clear previous suggestions
+    values = valuesGlobal(sheetCodeName);
+    nbLineBef = values.length;
+    colNb = values[0].length;
     if(row>=nbLineBef || column >= colNumb) {
       return -1;
     }

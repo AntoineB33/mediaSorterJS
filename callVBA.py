@@ -2,10 +2,54 @@ import os
 import win32com.client as win32
 import pythoncom
 from win32com.client import VARIANT
+import requests
+import os
+from datetime import datetime
 
 
-def call_vba_function(macro_name, wbSheet, order):
-    file_path = r"C:\Users\abarb\Documents\health\news_underground\mediaSorter\programs\excel_prog\mediaSorter\dance.xlsm"
+def retrieve_excel_file_by_id(directory: str, id: str):
+    # Convert the ID back to a datetime object
+    file_date = datetime.strptime(id, "%Y%m%d_%H%M%S")
+    
+    # Loop through each file in the directory
+    for filename in os.listdir(directory):
+        # Construct the full file path
+        file_path = os.path.join(directory, filename)
+        
+        # Check if it is an Excel file
+        if filename.endswith(('.xlsx', '.xls')) and os.path.isfile(file_path):
+            # Get the file's creation time
+            creation_time = datetime.fromtimestamp(os.path.getctime(file_path))
+            
+            # Compare the file's creation time with the ID datetime
+            if creation_time == file_date:
+                print(f"Found matching file: {file_path}")
+                return file_path
+    
+    # If no matching file is found
+    print("No file found with the matching creation date.")
+    return None
+
+def call_node_endpoint(url: str, message: str):
+    # Add the string parameter as a query parameter
+    params = {'message': message}
+    
+    try:
+        # Send GET request with the query parameter
+        response = requests.get(url, params=params)
+        
+        # Check if the request was successful
+        if response.status_code == 200:
+            print("Response from Node.js:", response.json())
+        else:
+            print(f"Error: {response.status_code} - {response.text}")
+    
+    except requests.exceptions.RequestException as e:
+        print(f"Request failed: {e}")
+
+def call_vba_function(wbSheet: str):
+    file_path = retrieve_excel_file_by_id(r"C:\Users\abarb\Documents\health\news_underground\mediaSorter\programs\excel_prog\mediaSorter",
+                                          wbSheet)
     
     # Try to get an existing Excel instance
     try:
@@ -32,31 +76,15 @@ def call_vba_function(macro_name, wbSheet, order):
     if not workbook:
         workbook = excel_app.Workbooks.Open(file_path)
 
-    # Convert Python lists to VARIANT arrays if necessary
-    converted_args = [wbSheet]
-    if order:
-        variant_array = VARIANT(pythoncom.VT_ARRAY | pythoncom.VT_I4, order)
-        converted_args.append(variant_array)
-    # macro_name = "test3"
-    print(f"'{workbook.Name}'!{macro_name}")
-    print(converted_args)
-    # Call the VBA macro with parameters
-    result = excel_app.Application.Run(f"'{workbook.Name}'!{macro_name}", *converted_args)
-    # result = excel_app.Application.Run(f"'{workbook.Name}'!test")
+    # Call the public VBA function and get the result
+    result = workbook.Application.Run(f"'{workbook.Name}'!WhatEndPoint")
+    call_node_endpoint(result, wbSheet)
 
-    # Close the workbook if it was opened by this function
-    if workbook and workbook.FullName == file_path and is_new_instance:
-        workbook.Close(SaveChanges=False)
-
-    # Quit Excel only if it was a new instance, otherwise restore initial visibility
+    # Restore initial visibility and close workbook if it's a new instance
     if is_new_instance:
-        excel_app.Quit()
-    else:
+        workbook.Close(False)  # Close without saving
         excel_app.Visible = initial_visibility
-
-    # Explicitly release COM objects
-    workbook = None
-    excel_app = None
+        excel_app.Quit()
 
     return result
 

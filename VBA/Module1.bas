@@ -821,35 +821,6 @@ Public Sub switchSort(sheetCodeNameLocal As String)
     sorting(sheetCodeNameLocal) = Not sorting(sheetCodeNameLocal)
 End Sub
 
-Public Function SetOrGetUniqueWorkbookID()
-    Dim uniqueID As String
-    Dim workbook As Workbook
-    Dim customProperties As DocumentProperties
-    Dim propertyExists As Boolean
-    propertyExists = False
-    
-    ' Reference the current workbook
-    Set workbook = ThisWorkbook
-    Set customProperties = workbook.CustomDocumentProperties
-    
-    ' Check if the custom property "UniqueID" exists
-    On Error Resume Next
-    uniqueID = customProperties("UniqueID").Value
-    If Err.Number = 0 Then
-        propertyExists = True
-    End If
-    On Error GoTo 0
-    
-    ' If the UniqueID does not exist, create one
-    If Not propertyExists Then
-        uniqueID = CreateGUID()
-        customProperties.Add Name:="UniqueID", LinkToContent:=False, Type:=msoPropertyTypeString, Value:=uniqueID
-    End If
-    
-    ' Display the Unique ID
-    SetOrGetUniqueWorkbookID = uniqueID
-End Function
-
 ' Function to generate a GUID (Globally Unique Identifier)
 Private Function CreateGUID2() As String
     Dim guid As String
@@ -863,39 +834,84 @@ Private Function CreateGUID() As String
     CreateGUID = Left(timestamp, 8) & "-" & Mid(timestamp, 9, 4) & "-" & Mid(timestamp, 13, 4) & "-" & Right(timestamp, 4)
 End Function
 
+Public Function WhatEndPoint() As String
+    WhatEndPoint = "http://localhost:" & port & "/execute"
+End Function
 
-Public Function SetOrGetUniqueWorkbookID2()
-    Dim uniqueID As String
-    Dim ws As Worksheet
-    Dim propertyExists As Boolean
-    propertyExists = False
+Sub StartNodeServerWithAvailablePort()
+    Dim shellCommand As String
+    Dim serverStarted As Boolean
+    Dim maxRetries As Integer
+    Dim retries As Integer
+
+    port = 3000         ' Initial port to try
+    maxRetries = 10      ' Maximum number of attempts with different ports
+    serverStarted = False
+    retries = 0
+
+    Do While Not serverStarted And retries < maxRetries
+        shellCommand = "cmd /c node C:\Users\abarb\Documents\health\news_underground\mediaSorter\programs\excel_prog\mediaSorter\my-js-server\server.js " & port
+        Shell shellCommand, vbHide
+
+        ' Wait for a moment to let the server start
+        Application.Wait Now + TimeValue("0:00:02")
+        
+        ' Check if the server responded on this port
+        If IsPortOpen(port) Then
+            serverStarted = True
+            MsgBox "Node.js server started on port " & port
+        Else
+            ' Increment port and retry
+            port = port + 1
+            retries = retries + 1
+        End If
+    Loop
     
-    ' Try to find the hidden worksheet for settings
+    If Not serverStarted Then
+        MsgBox "Failed to start Node.js server after " & maxRetries & " attempts.", vbCritical
+    End If
+End Sub
+
+Function IsPortOpen(port As Integer) As Boolean
+    Dim xhr As Object
+    Set xhr = CreateObject("MSXML2.XMLHTTP.6.0")
+    
     On Error Resume Next
-    Set ws = ThisWorkbook.Worksheets("HiddenSettings")
+    xhr.Open "GET", "http://localhost:" & port & "/health", False
+    xhr.Send
+    
+    ' Check if status is 200, meaning the server responded
+    IsPortOpen = (xhr.Status = 200)
     On Error GoTo 0
+End Function
+
+Function CreateIDFromDate(creationDate As Date) As String
+    ' Format the creation date as YYYYMMDD_HHMMSS
+    CreateIDFromDate = Format(creationDate, "YYYYMMDD_HHMMSS")
+End Function
+
+Function GetCurrentWorkbookCreationDate() As Date
+    Dim fso As Object
+    Dim filePath As String
     
-    ' If the worksheet does not exist, create it
-    If ws Is Nothing Then
-        Set ws = ThisWorkbook.Worksheets.Add
-        ws.Name = "HiddenSettings"
-        ws.Visible = xlSheetVeryHidden
-    End If
+    ' Get the file path of the current workbook
+    filePath = ThisWorkbook.FullName
     
-    ' Check if the unique ID is already in the worksheet
-    On Error Resume Next
-    uniqueID = ws.Range("A1").Value
-    If uniqueID <> "" Then
-        propertyExists = True
-    End If
-    On Error GoTo 0
+    ' Create the FileSystemObject
+    Set fso = CreateObject("Scripting.FileSystemObject")
     
-    ' If the UniqueID does not exist, create one
-    If Not propertyExists Then
-        uniqueID = CreateGUID()
-        ws.Range("A1").Value = uniqueID
+    ' Check if the file exists
+    If fso.FileExists(filePath) Then
+        ' Get the file's creation date
+        GetCurrentWorkbookCreationDate = fso.GetFile(filePath).DateCreated
+    Else
+        ' If file does not exist, return an error date
+        GetCurrentWorkbookCreationDate = CDate("1/1/1900")  ' Or any error handling you prefer
     End If
+End Function
+
+Public Function SetOrGetUniqueWorkbookID()
     
     ' Display the Unique ID
-    SetOrGetUniqueWorkbookID = uniqueID
+    SetOrGetUniqueWorkbookID = CreateIDFromDate(GetFileCreationDate)
 End Function

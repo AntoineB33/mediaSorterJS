@@ -4,7 +4,7 @@ const { exec } = require('child_process');
 const path = require('path');
 const util = require('util');
 const app = express();
-const port = 3000;
+const port = process.argv[2] || 3000;
 // Middleware to parse JSON bodies
 app.use(express.json());
 
@@ -13,7 +13,6 @@ var msgTypeColors = [{ r: 255, g: 0, b: 0 }, { r: 255, g: 137, b: 0 }, { r: 0, g
 var values0Glob = {};
 var valuesGlob = {};
 var prevLine = {};
-var nbLineBef;
 var lenAgg;
 var attributes;
 var sorting = {};
@@ -100,10 +99,14 @@ function handleSelectLinks(sheetCodeName) {
     return -1;
   }
 
-  let values = valuesGlob[sheetCodeName];
-  
   let row = editRow[sheetCodeName];
   let column = editCol[sheetCodeName];
+  let values = valuesGlob[sheetCodeName];
+  let nbLineBef = values.length;
+  if(nbLineBef == 0) {
+    return -1;
+  }
+  let colNumb = values[0].length;
   if(row>=nbLineBef || column >= colNumb) {
     return -1;
   }
@@ -135,7 +138,7 @@ function handleSelectLinks(sheetCodeName) {
           }
         }
       } else if (column < colNumb - 1) {
-        nbMediaInCat = attributes[data[row][2]]
+        nbMediaInCat = attributes[data[row][2]].length;
         for(let r = 1; r < values.length; r++) {
           for(let d = 4; d < colNumb - 1; d++) {
             for(let f = 0; f < values[r][d].length; f++) {
@@ -165,34 +168,31 @@ function addToSupDic(dic, key1, key2, value) {
 async function handleChange(updates, sheetCodeName) {
   let values = valuesGlob[sheetCodeName];
   let values0 = values0Glob[sheetCodeName];
-  nbLineBef = values.length;
-  if(nbLineBef > 0) {
-    colNumb = values[0].length;
-  } else {
-    colNumb = 0;
-  }
-  if(values[1].length == 5 && values[0].length == 6) {
-    let y = 4;
-  }
   for(let i = 0; i < updates.length; i++) {
     var row = updates[i][0] - 1;  // Adjusting for zero-based index
     var column = updates[i][1] - 1;  // Adjusting for zero-based index
     var value = updates[i][2];
     if(value) {
-      while(headerColors.length <= column) {
-        headerColors.push(null);
-        columnTypes.push(null);
-      }
+      // add rows if needed
       while(values.length <= row) {
         values.push([]);
         values0.push([]);
       }
-      for (let i = 0; i < values.length; i++) {
-        while (values[i].length <= colNumb) {
-          values[i].push([]);
-          values0[i].push(null);
+
+      // add columns if needed
+      if(values[0].length <= column) {
+        while(headerColors.length <= column) {
+          headerColors.push(null);
+          columnTypes.push(null);
+        }
+        for (let i = 0; i < values.length; i++) {
+          while (values[i].length <= column) {
+            values[i].push([]);
+            values0[i].push(null);
+          }
         }
       }
+
       let splitValue = [];
       splitValue = value
           .split(";")
@@ -205,6 +205,13 @@ async function handleChange(updates, sheetCodeName) {
 
       values[row][column] = [];
       values0[row][column] = value;
+      let nbLineBef = values.length;
+      let colNumb;
+      if(nbLineBef > 0) {
+        colNumb = values[0].length;
+      } else {
+        colNumb = 0;
+      }
 
       // remove empty lines at the end
       const nbLineBefBef = nbLineBef;
@@ -362,22 +369,8 @@ function checkBrack(values, i, j, k, val, columnTitle) {
 }
 
 function initializeData(values) {
-  rowIdMap[sheetCodeName] = [];
   for (let i = 1; i < nbLineBef; i++) {
     data.push({attributes: new Set(), posteriors: [], ulteriors: [], nbPost: 0, minDist: 0, maxDist: Infinity});
-    // check if a non-empty row has no name
-    let isEmpty = true;
-    for (let j = 0; j < colNumb; j++) {
-      if (values[i][j] !== '') {
-        isEmpty = false;
-        break;
-      }
-    }
-    if(isEmpty) {
-      data[i] = -1;
-    } else {
-      rowIdMap[sheetCodeName].push(i);
-    }
   }
   data = data.filter(e => e !== -1);
 }
@@ -703,23 +696,16 @@ async function getConditions(values, sheetCodeName) {
       data[i].conditions = transformTerms(formulaList, exampleTransform, reverseReplacements, newInds);
     }
   }
-
-  // let result = await callCProgram(data.filter(e => !e.isAtt));
-
-
-  // Example JSON object following the format required by the C program
-  const exampleInput = {
-    nodes: [
-      { after: [1, 2], before_count: 0 },
-      { after: [3], before_count: 1 },
-      { after: [], before_count: 1 },
-      { after: [], before_count: 1 }
-    ]
-  };
-  // let result = await callCProgram(exampleInput);
   
+  checkWithC(sheetCodeName);
   response.push({ "listBoxList": [] });
   resolved[sheetCodeName] = true;
+}
+
+async function checkWithC(sheetCodeName) {
+  if(0) {
+    resolved[sheetCodeName] = false;
+  }
 }
 
 async function check(sheetCodeName) {
@@ -1158,6 +1144,12 @@ app.post('/execute', async (req, res) => {
           }
           console.log(`Résultat: ${stdout}`);
       });
+      break;
+    case "better sorting":
+      response.push({"sort": body});
+      break;
+    case "C stops sorting":
+      response.push({"sort": body});
       break;
   }
   res.json(response);
