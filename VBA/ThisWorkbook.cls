@@ -1,7 +1,7 @@
 'xlwings vba edit
 
 
-Private Sub Workbook_Open()
+Private Sub Workbook_Open0()
     Dim result As Variant
     result = GetRowAndColumn(activeCell.Address(False, False))
     editRow = result(0)
@@ -16,21 +16,8 @@ Private Sub Workbook_Open()
     avgCharWidth = 6 ' Adjust this value based on your font size and type
 
 
-    RunCmdAndWait
-    ' Call Shell("cmd.exe /C C:\Users\abarb\Documents\health\news_underground\mediaSorter\programs\excel_prog\mediaSorter\startNodeJS.bat", vbHide)
-    Call Shell("cmd.exe /C C:\Users\abarb\Documents\health\news_underground\mediaSorter\programs\excel_prog\mediaSorter\startNodeJS.bat")
-    
-    Dim check As String
-    check = SendRequestToNodeJSEndpoint
-    If check = "Request timed out." Then
-        MsgBox "The server is not responding. Please make sure the Node.js server is running."
-        Exit Sub
-    End If
-    check = SendRequestToNodeJSEndpoint2
-    If check = "Request timed out." Then
-        MsgBox "The server is not responding. Please make sure the Node.js server is running."
-        Exit Sub
-    End If
+    stopNodeJS
+    startNodeJS
     
     ' Dim isServerUp As Boolean
     ' Dim serverStarted As Boolean
@@ -88,7 +75,7 @@ Private Sub Workbook_Open()
     Workbook_SheetActivate activeSheet
 End Sub
 
-Sub RunCmdAndWait()
+Sub stopNodeJS()
     Dim wsh As Object
     Dim exitCode As Integer
     Dim cmd As String
@@ -101,6 +88,56 @@ Sub RunCmdAndWait()
 
     ' Run the command and wait for it to complete
     exitCode = wsh.Run("cmd.exe /C """ & cmd & """", 0, True) ' vbHide is 0
+End Sub
+
+Function IsServerUp(url As String) As Boolean
+    Dim http As Object
+    On Error GoTo FailSafe
+
+    Set http = CreateObject("WinHttp.WinHttpRequest.5.1")
+    http.Open "GET", url, False
+    http.Send
+    
+    If http.Status = 200 Then
+        IsServerUp = True
+    End If
+
+FailSafe:
+    On Error GoTo 0
+End Function
+
+Sub startNodeJS()
+    Dim wsh As Object
+    Dim cmd As String
+    Dim serverUrl As String
+    Dim timeOutSeconds As Long
+    Dim startTime As Double
+    
+    serverUrl = "http://localhost:3000"   ' <-- Change this to whatever URL & port you use
+    cmd = "C:\Users\abarb\Documents\health\news_underground\mediaSorter\programs\excel_prog\mediaSorter\startNodeJS.bat"    ' <-- Path to your start script
+    timeOutSeconds = 30                   ' Try for 30 seconds (adjust if needed)
+    
+    Set wsh = CreateObject("WScript.Shell")
+    
+    ' 1) Start the script in a separate command window (won't block VBA)
+    wsh.Run "cmd.exe /C start """" """ & cmd & """", 0, False
+    
+    ' 2) Wait/poll until the server is up or until we exceed the timeout
+    startTime = Timer
+    Do
+        If IsServerUp(serverUrl) Then
+            ' The server is responding with HTTP 200, so we can proceed
+            Exit Do
+        End If
+        
+        If (Timer - startTime) > timeOutSeconds Then
+            MsgBox "Timed out waiting for Node.js server to start.", vbExclamation
+            Exit Sub
+        End If
+        
+        ' Wait 1 second before checking again
+        Application.Wait Now + TimeValue("0:00:01")
+    Loop
 End Sub
 
 Private Sub Workbook_SheetActivate(ByVal Sh As Object)

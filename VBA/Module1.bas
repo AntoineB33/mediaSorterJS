@@ -884,34 +884,3 @@ Function IsPortOpen(port As Integer) As Boolean
     IsPortOpen = (xhr.Status = 200)
     On Error GoTo 0
 End Function
-
-Function CreateIDFromDate(creationDate As Date) As String
-    ' Format the creation date as YYYYMMDD_HHMMSS
-    CreateIDFromDate = Format(creationDate, "YYYYMMDD_HHMMSS")
-End Function
-
-Function GetCurrentWorkbookCreationDate() As Date
-    Dim fso As Object
-    Dim filePath As String
-    
-    ' Get the file path of the current workbook
-    filePath = ThisWorkbook.FullName
-    
-    ' Create the FileSystemObject
-    Set fso = CreateObject("Scripting.FileSystemObject")
-    
-    ' Check if the file exists
-    If fso.FileExists(filePath) Then
-        ' Get the file's creation date
-        GetCurrentWorkbookCreationDate = fso.GetFile(filePath).DateCreated
-    Else
-        ' If file does not exist, return an error date
-        GetCurrentWorkbookCreationDate = CDate("1/1/1900")  ' Or any error handling you prefer
-    End If
-End Function
-
-Public Function SetOrGetUniqueWorkbookID()
-    
-    ' Display the Unique ID
-    SetOrGetUniqueWorkbookID = CreateIDFromDate(GetFileCreationDate)
-End Function
