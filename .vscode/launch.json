@@ -18,6 +18,7 @@
             "type": "node",
             "request": "launch",
             "name": "Launch Program",
+            "runtimeVersion": "22.13.0",
             "skipFiles": [
                 "<node_internals>/**"
             ],
