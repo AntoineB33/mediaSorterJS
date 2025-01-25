@@ -165,7 +165,7 @@ function addToSupDic(dic, key1, key2, value) {
   addToDic(dic[key1], key2, value);
 }
 
-async function handleChange(updates, sheetCodeName) {
+async function handleChange(params, updates, sheetCodeName) {
   let values = valuesGlob[sheetCodeName];
   let values0 = values0Glob[sheetCodeName];
   for(let i = 0; i < updates.length; i++) {
@@ -1075,7 +1075,46 @@ app.post('/execute', async (req, res) => {
   let values = valuesGlob[sheetCodeName];
   switch (funcName) {
     case "handleChange":
-      await handleChange(body.changes, sheetCodeName);
+
+      params = {};
+      params.values = values;
+      params.i = i;
+      params.j = j;
+      params.k = k;
+      params.val = val;
+      params.columnTitle = columnTitle;
+      params.message = message;
+      params.suggs = suggs;
+      params.msgTypeColors = msgTypeColors;
+      params.values0Glob = values0Glob;
+      params.valuesGlob = valuesGlob;
+      params.prevLine = prevLine;
+      params.lenAgg = lenAgg;
+      params.attributes = attributes;
+      params.sorting = sorting;
+      params.sheetCodeName = sheetCodeName;
+      params.editRow = editRow;
+      params.editCol = editCol;
+      params.resolved = resolved;
+      params.oldVersionsMaxNb = oldVersionsMaxNb;
+      params.columnTypes = columnTypes;
+      params.data = data;
+      params.allMediaRows = allMediaRows;
+      params.attrOfAttr = attrOfAttr;
+      params.nameSt = nameSt;
+      params.nameInd = nameInd;
+      params.mediaSt = mediaSt;
+      params.mediaInd = mediaInd;
+      params.headerColors = headerColors;
+      params.attNames = attNames;
+      params.actionsHistory = actionsHistory;
+      params.indActHist = indActHist;
+      params.handleChanges = handleChanges;
+      params.rowIdMap = rowIdMap;
+      params.response = response;
+      params.colNumb = colNumb;
+    
+      await handleChange(params, body.changes);
       break;
     case "selectionChange":
       editRow[sheetCodeName] = body.editRow;
@@ -1085,7 +1124,46 @@ app.post('/execute', async (req, res) => {
     case 'chgSheet':
       sheetCodeName = body.sheetCodeName;
       headerColors = body.headerColors;
-      await handleChange([], sheetCodeName);
+
+      params = {};
+      params.values = values;
+      params.i = i;
+      params.j = j;
+      params.k = k;
+      params.val = val;
+      params.columnTitle = columnTitle;
+      params.message = message;
+      params.suggs = suggs;
+      params.msgTypeColors = msgTypeColors;
+      params.values0Glob = values0Glob;
+      params.valuesGlob = valuesGlob;
+      params.prevLine = prevLine;
+      params.lenAgg = lenAgg;
+      params.attributes = attributes;
+      params.sorting = sorting;
+      params.sheetCodeName = sheetCodeName;
+      params.editRow = editRow;
+      params.editCol = editCol;
+      params.resolved = resolved;
+      params.oldVersionsMaxNb = oldVersionsMaxNb;
+      params.columnTypes = columnTypes;
+      params.data = data;
+      params.allMediaRows = allMediaRows;
+      params.attrOfAttr = attrOfAttr;
+      params.nameSt = nameSt;
+      params.nameInd = nameInd;
+      params.mediaSt = mediaSt;
+      params.mediaInd = mediaInd;
+      params.headerColors = headerColors;
+      params.attNames = attNames;
+      params.actionsHistory = actionsHistory;
+      params.indActHist = indActHist;
+      params.handleChanges = handleChanges;
+      params.rowIdMap = rowIdMap;
+      params.response = response;
+      params.colNumb = colNumb;
+      
+      await handleChange(params, []);
       break;
     case "dataGeneratorSub":
       dataGeneratorSub(values, sheetCodeName);

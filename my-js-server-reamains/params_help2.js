@@ -1,5 +1,5 @@
 
-let params = {};
+
 params.values = values;
 params.i = i;
 params.j = j;
