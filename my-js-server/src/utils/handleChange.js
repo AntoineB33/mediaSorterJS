@@ -188,6 +188,44 @@ async function handleChange(params, updates) {
         params.colNumb = colNumb;
         
         inconsist_removing_elem(values, 0, j, k, `Column ${getColumnTag(j)} labelled as "${alreadyInd[0]}" already at column ${getColumnTag(alreadyInd[1])}.`);
+
+        params.values = values;
+        params.i = i;
+        params.j = j;
+        params.k = k;
+        params.val = val;
+        params.columnTitle = columnTitle;
+        params.message = message;
+        params.suggs = suggs;
+        params.msgTypeColors = msgTypeColors;
+        params.values0Glob = values0Glob;
+        params.valuesGlob = valuesGlob;
+        params.prevLine = prevLine;
+        params.lenAgg = lenAgg;
+        params.attributes = attributes;
+        params.sorting = sorting;
+        params.sheetCodeName = sheetCodeName;
+        params.editRow = editRow;
+        params.editCol = editCol;
+        params.resolved = resolved;
+        params.oldVersionsMaxNb = oldVersionsMaxNb;
+        params.columnTypes = columnTypes;
+        params.data = data;
+        params.allMediaRows = allMediaRows;
+        params.attrOfAttr = attrOfAttr;
+        params.nameSt = nameSt;
+        params.nameInd = nameInd;
+        params.mediaSt = mediaSt;
+        params.mediaInd = mediaInd;
+        params.headerColors = headerColors;
+        params.attNames = attNames;
+        params.actionsHistory = actionsHistory;
+        params.indActHist = indActHist;
+        params.handleChanges = handleChanges;
+        params.rowIdMap = rowIdMap;
+        params.response = response;
+        params.colNumb = colNumb;
+        
         return;
       }
     }

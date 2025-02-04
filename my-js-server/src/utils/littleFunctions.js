@@ -64,5 +64,5 @@ function addListBoxList(params) {
         response[0]["listBoxList"].push([]);
       }
     }
-  }
+}
   

@@ -252,43 +252,6 @@ async function getConditions(params, values, sheetCodeName) {
         params.colNumb = colNumb;
         
         inconsist(params);
-        values = params.values;
-        i = params.i;
-        j = params.j;
-        k = params.k;
-        val = params.val;
-        columnTitle = params.columnTitle;
-        message = params.message;
-        suggs = params.suggs;
-        msgTypeColors = params.msgTypeColors;
-        values0Glob = params.values0Glob;
-        valuesGlob = params.valuesGlob;
-        prevLine = params.prevLine;
-        lenAgg = params.lenAgg;
-        attributes = params.attributes;
-        sorting = params.sorting;
-        sheetCodeName = params.sheetCodeName;
-        editRow = params.editRow;
-        editCol = params.editCol;
-        resolved = params.resolved;
-        oldVersionsMaxNb = params.oldVersionsMaxNb;
-        columnTypes = params.columnTypes;
-        data = params.data;
-        allMediaRows = params.allMediaRows;
-        attrOfAttr = params.attrOfAttr;
-        nameSt = params.nameSt;
-        nameInd = params.nameInd;
-        mediaSt = params.mediaSt;
-        mediaInd = params.mediaInd;
-        headerColors = params.headerColors;
-        attNames = params.attNames;
-        actionsHistory = params.actionsHistory;
-        indActHist = params.indActHist;
-        handleChanges = params.handleChanges;
-        rowIdMap = params.rowIdMap;
-        response = params.response;
-        colNumb = params.colNumb;
-        
         return;
       }
       
@@ -338,43 +301,6 @@ async function getConditions(params, values, sheetCodeName) {
           params.colNumb = colNumb;
           
           inconsist(params);
-          values = params.values;
-          i = params.i;
-          j = params.j;
-          k = params.k;
-          val = params.val;
-          columnTitle = params.columnTitle;
-          message = params.message;
-          suggs = params.suggs;
-          msgTypeColors = params.msgTypeColors;
-          values0Glob = params.values0Glob;
-          valuesGlob = params.valuesGlob;
-          prevLine = params.prevLine;
-          lenAgg = params.lenAgg;
-          attributes = params.attributes;
-          sorting = params.sorting;
-          sheetCodeName = params.sheetCodeName;
-          editRow = params.editRow;
-          editCol = params.editCol;
-          resolved = params.resolved;
-          oldVersionsMaxNb = params.oldVersionsMaxNb;
-          columnTypes = params.columnTypes;
-          data = params.data;
-          allMediaRows = params.allMediaRows;
-          attrOfAttr = params.attrOfAttr;
-          nameSt = params.nameSt;
-          nameInd = params.nameInd;
-          mediaSt = params.mediaSt;
-          mediaInd = params.mediaInd;
-          headerColors = params.headerColors;
-          attNames = params.attNames;
-          actionsHistory = params.actionsHistory;
-          indActHist = params.indActHist;
-          handleChanges = params.handleChanges;
-          rowIdMap = params.rowIdMap;
-          response = params.response;
-          colNumb = params.colNumb;
-          
           return -1;
         }
       }
@@ -480,83 +406,7 @@ async function getConditions(params, values, sheetCodeName) {
               return -1;
             }
             if(refInd_val == -2) {
-
-              params = {};
-              params.values = values;
-              params.i = i;
-              params.j = 0;
-              params.k = k;
-              params.val = val;
-              params.columnTitle = columnTitle;
-              params.message = `attribute "${val}" at row ${i + 1} not found.`;
-              params.suggs = [];
-              params.msgTypeColors = msgTypeColors;
-              params.values0Glob = values0Glob;
-              params.valuesGlob = valuesGlob;
-              params.prevLine = prevLine;
-              params.lenAgg = lenAgg;
-              params.attributes = attributes;
-              params.sorting = sorting;
-              params.sheetCodeName = sheetCodeName;
-              params.editRow = editRow;
-              params.editCol = editCol;
-              params.resolved = resolved;
-              params.oldVersionsMaxNb = oldVersionsMaxNb;
-              params.columnTypes = columnTypes;
-              params.data = data;
-              params.allMediaRows = allMediaRows;
-              params.attrOfAttr = attrOfAttr;
-              params.nameSt = nameSt;
-              params.nameInd = nameInd;
-              params.mediaSt = mediaSt;
-              params.mediaInd = mediaInd;
-              params.headerColors = headerColors;
-              params.attNames = attNames;
-              params.actionsHistory = actionsHistory;
-              params.indActHist = indActHist;
-              params.handleChanges = handleChanges;
-              params.rowIdMap = rowIdMap;
-              params.response = response;
-              params.colNumb = colNumb;
-              
               inconsist(params);
-              values = params.values;
-              i = params.i;
-              j = params.j;
-              k = params.k;
-              val = params.val;
-              columnTitle = params.columnTitle;
-              message = params.message;
-              suggs = params.suggs;
-              msgTypeColors = params.msgTypeColors;
-              values0Glob = params.values0Glob;
-              valuesGlob = params.valuesGlob;
-              prevLine = params.prevLine;
-              lenAgg = params.lenAgg;
-              attributes = params.attributes;
-              sorting = params.sorting;
-              sheetCodeName = params.sheetCodeName;
-              editRow = params.editRow;
-              editCol = params.editCol;
-              resolved = params.resolved;
-              oldVersionsMaxNb = params.oldVersionsMaxNb;
-              columnTypes = params.columnTypes;
-              data = params.data;
-              allMediaRows = params.allMediaRows;
-              attrOfAttr = params.attrOfAttr;
-              nameSt = params.nameSt;
-              nameInd = params.nameInd;
-              mediaSt = params.mediaSt;
-              mediaInd = params.mediaInd;
-              headerColors = params.headerColors;
-              attNames = params.attNames;
-              actionsHistory = params.actionsHistory;
-              indActHist = params.indActHist;
-              handleChanges = params.handleChanges;
-              rowIdMap = params.rowIdMap;
-              response = params.response;
-              colNumb = params.colNumb;
-              
               return -1;
             }
             groups.attrib_ref = refInd_val;
@@ -710,43 +560,6 @@ async function getConditions(params, values, sheetCodeName) {
               params.colNumb = colNumb;
               
               inconsist(params);
-              values = params.values;
-              i = params.i;
-              j = params.j;
-              k = params.k;
-              val = params.val;
-              columnTitle = params.columnTitle;
-              message = params.message;
-              suggs = params.suggs;
-              msgTypeColors = params.msgTypeColors;
-              values0Glob = params.values0Glob;
-              valuesGlob = params.valuesGlob;
-              prevLine = params.prevLine;
-              lenAgg = params.lenAgg;
-              attributes = params.attributes;
-              sorting = params.sorting;
-              sheetCodeName = params.sheetCodeName;
-              editRow = params.editRow;
-              editCol = params.editCol;
-              resolved = params.resolved;
-              oldVersionsMaxNb = params.oldVersionsMaxNb;
-              columnTypes = params.columnTypes;
-              data = params.data;
-              allMediaRows = params.allMediaRows;
-              attrOfAttr = params.attrOfAttr;
-              nameSt = params.nameSt;
-              nameInd = params.nameInd;
-              mediaSt = params.mediaSt;
-              mediaInd = params.mediaInd;
-              headerColors = params.headerColors;
-              attNames = params.attNames;
-              actionsHistory = params.actionsHistory;
-              indActHist = params.indActHist;
-              handleChanges = params.handleChanges;
-              rowIdMap = params.rowIdMap;
-              response = params.response;
-              colNumb = params.colNumb;
-              
               return -1;
             }
           }
@@ -825,43 +638,6 @@ async function getConditions(params, values, sheetCodeName) {
               params.colNumb = colNumb;
               
               inconsist(params);
-              values = params.values;
-              i = params.i;
-              j = params.j;
-              k = params.k;
-              val = params.val;
-              columnTitle = params.columnTitle;
-              message = params.message;
-              suggs = params.suggs;
-              msgTypeColors = params.msgTypeColors;
-              values0Glob = params.values0Glob;
-              valuesGlob = params.valuesGlob;
-              prevLine = params.prevLine;
-              lenAgg = params.lenAgg;
-              attributes = params.attributes;
-              sorting = params.sorting;
-              sheetCodeName = params.sheetCodeName;
-              editRow = params.editRow;
-              editCol = params.editCol;
-              resolved = params.resolved;
-              oldVersionsMaxNb = params.oldVersionsMaxNb;
-              columnTypes = params.columnTypes;
-              data = params.data;
-              allMediaRows = params.allMediaRows;
-              attrOfAttr = params.attrOfAttr;
-              nameSt = params.nameSt;
-              nameInd = params.nameInd;
-              mediaSt = params.mediaSt;
-              mediaInd = params.mediaInd;
-              headerColors = params.headerColors;
-              attNames = params.attNames;
-              actionsHistory = params.actionsHistory;
-              indActHist = params.indActHist;
-              handleChanges = params.handleChanges;
-              rowIdMap = params.rowIdMap;
-              response = params.response;
-              colNumb = params.colNumb;
-              
               return -1;
             }
             data[i].position = groups.position;
@@ -914,43 +690,6 @@ async function getConditions(params, values, sheetCodeName) {
       params.colNumb = colNumb;
       
       inconsist(params);
-      values = params.values;
-      i = params.i;
-      j = params.j;
-      k = params.k;
-      val = params.val;
-      columnTitle = params.columnTitle;
-      message = params.message;
-      suggs = params.suggs;
-      msgTypeColors = params.msgTypeColors;
-      values0Glob = params.values0Glob;
-      valuesGlob = params.valuesGlob;
-      prevLine = params.prevLine;
-      lenAgg = params.lenAgg;
-      attributes = params.attributes;
-      sorting = params.sorting;
-      sheetCodeName = params.sheetCodeName;
-      editRow = params.editRow;
-      editCol = params.editCol;
-      resolved = params.resolved;
-      oldVersionsMaxNb = params.oldVersionsMaxNb;
-      columnTypes = params.columnTypes;
-      data = params.data;
-      allMediaRows = params.allMediaRows;
-      attrOfAttr = params.attrOfAttr;
-      nameSt = params.nameSt;
-      nameInd = params.nameInd;
-      mediaSt = params.mediaSt;
-      mediaInd = params.mediaInd;
-      headerColors = params.headerColors;
-      attNames = params.attNames;
-      actionsHistory = params.actionsHistory;
-      indActHist = params.indActHist;
-      handleChanges = params.handleChanges;
-      rowIdMap = params.rowIdMap;
-      response = params.response;
-      colNumb = params.colNumb;
-      
       return -1;
     }
   
@@ -1028,43 +767,6 @@ async function getConditions(params, values, sheetCodeName) {
           params.colNumb = colNumb;
           
           inconsist(params);
-          values = params.values;
-          i = params.i;
-          j = params.j;
-          k = params.k;
-          val = params.val;
-          columnTitle = params.columnTitle;
-          message = params.message;
-          suggs = params.suggs;
-          msgTypeColors = params.msgTypeColors;
-          values0Glob = params.values0Glob;
-          valuesGlob = params.valuesGlob;
-          prevLine = params.prevLine;
-          lenAgg = params.lenAgg;
-          attributes = params.attributes;
-          sorting = params.sorting;
-          sheetCodeName = params.sheetCodeName;
-          editRow = params.editRow;
-          editCol = params.editCol;
-          resolved = params.resolved;
-          oldVersionsMaxNb = params.oldVersionsMaxNb;
-          columnTypes = params.columnTypes;
-          data = params.data;
-          allMediaRows = params.allMediaRows;
-          attrOfAttr = params.attrOfAttr;
-          nameSt = params.nameSt;
-          nameInd = params.nameInd;
-          mediaSt = params.mediaSt;
-          mediaInd = params.mediaInd;
-          headerColors = params.headerColors;
-          attNames = params.attNames;
-          actionsHistory = params.actionsHistory;
-          indActHist = params.indActHist;
-          handleChanges = params.handleChanges;
-          rowIdMap = params.rowIdMap;
-          response = params.response;
-          colNumb = params.colNumb;
-          
           return -1;
         }
   

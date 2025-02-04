@@ -2291,7 +2291,6 @@ function searching(params, values, r, d, f) {
     }
   }
   stat2 = 0;
-  console.log("return stop2")
 
   params.values = values;
   params.i = i;
@@ -3594,41 +3593,7 @@ async function renameSymbol(params, oldValue, newValue) {
 
 function handleoldNameInputClick(params) {
   let values = params.values;
-  let i = params.i;
-  let j = params.j;
-  let k = params.k;
-  let val = params.val;
-  let columnTitle = params.columnTitle;
-  let message = params.message;
-  let suggs = params.suggs;
-  let msgTypeColors = params.msgTypeColors;
-  let values0Glob = params.values0Glob;
-  let valuesGlob = params.valuesGlob;
-  let prevLine = params.prevLine;
-  let lenAgg = params.lenAgg;
-  let attributes = params.attributes;
-  let sorting = params.sorting;
-  let sheetCodeName = params.sheetCodeName;
-  let editRow = params.editRow;
-  let editCol = params.editCol;
-  let resolved = params.resolved;
-  let oldVersionsMaxNb = params.oldVersionsMaxNb;
-  let columnTypes = params.columnTypes;
-  let data = params.data;
-  let allMediaRows = params.allMediaRows;
-  let attrOfAttr = params.attrOfAttr;
-  let nameSt = params.nameSt;
-  let nameInd = params.nameInd;
-  let mediaSt = params.mediaSt;
-  let mediaInd = params.mediaInd;
-  let headerColors = params.headerColors;
-  let attNames = params.attNames;
-  let actionsHistory = params.actionsHistory;
-  let indActHist = params.indActHist;
-  let handleChanges = params.handleChanges;
-  let rowIdMap = params.rowIdMap;
   let response = params.response;
-  let colNumb = params.colNumb;
 
   let rowId = range.rowIndex; // Directly use rowIndex property
   let totalRows = range.rowCount; // Get total rows in the selection
@@ -3639,6 +3604,9 @@ function handleoldNameInputClick(params) {
   }
   response.push({ "oldNameInput": [values[rowId][0].join("; ")] });
   response.push({ "newNameInput": [values[rowId][0].join("; ")] });
+
+  params.response = response;
+
 }
 
 function getTrimmedResult(str) {
@@ -3915,7 +3883,44 @@ exports.handleProgramLogic = async (req, res) => {
       params.response = response;
       params.colNumb = colNumb;
 
-      dataGeneratorSub(parmas);
+      dataGeneratorSub(params);
+      values = params.values;
+      i = params.i;
+      j = params.j;
+      k = params.k;
+      val = params.val;
+      columnTitle = params.columnTitle;
+      message = params.message;
+      suggs = params.suggs;
+      msgTypeColors = params.msgTypeColors;
+      values0Glob = params.values0Glob;
+      valuesGlob = params.valuesGlob;
+      prevLine = params.prevLine;
+      lenAgg = params.lenAgg;
+      attributes = params.attributes;
+      sorting = params.sorting;
+      sheetCodeName = params.sheetCodeName;
+      editRow = params.editRow;
+      editCol = params.editCol;
+      resolved = params.resolved;
+      oldVersionsMaxNb = params.oldVersionsMaxNb;
+      columnTypes = params.columnTypes;
+      data = params.data;
+      allMediaRows = params.allMediaRows;
+      attrOfAttr = params.attrOfAttr;
+      nameSt = params.nameSt;
+      nameInd = params.nameInd;
+      mediaSt = params.mediaSt;
+      mediaInd = params.mediaInd;
+      headerColors = params.headerColors;
+      attNames = params.attNames;
+      actionsHistory = params.actionsHistory;
+      indActHist = params.indActHist;
+      handleChanges = params.handleChanges;
+      rowIdMap = params.rowIdMap;
+      response = params.response;
+      colNumb = params.colNumb;
+      
       break;
     case "stop sorting":
       if(sorting[sheetCodeName]) {
